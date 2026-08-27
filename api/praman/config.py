@@ -67,7 +67,9 @@ class Settings(BaseSettings):
     twilio_auth_token: str = ""
     twilio_whatsapp_from: str = "whatsapp:+14155238886"
 
+    llm_provider: str = "fake"  # gemini | openai | anthropic | fake
     llm_api_key: str = ""
+    gemini_model: str = "gemini-2.5-flash"
 
     @field_validator("razorpay_key_id")
     @classmethod

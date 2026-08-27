@@ -1,0 +1,41 @@
+item,quantity,price_rupees,category_hint,notes
+Toor Dal,1kg,180,pulses,
+Moong Dal,1kg,175,pulses,
+Chana Dal,1kg,110,pulses,
+Masoor Dal,1kg,120,pulses,
+Urad Dal,1kg,160,pulses,
+Rajma,500g,95,pulses,
+Basmati Rice,5kg,650,grains,premium long grain
+Sona Masoori Rice,5kg,420,grains,
+Wheat Flour,5kg,240,grains,aashirvaad brand
+Poha,500g,45,grains,
+Suji,1kg,55,grains,
+Sugar,1kg,48,staples,
+Salt,1kg,22,staples,iodised
+Jaggery,1kg,68,staples,
+Turmeric Powder,200g,45,spices,
+Red Chilli Powder,200g,70,spices,
+Coriander Powder,200g,55,spices,
+Garam Masala,100g,85,spices,
+Cumin Seeds,250g,120,spices,
+Mustard Seeds,250g,60,spices,
+Black Pepper,100g,140,spices,whole
+Sunflower Oil,1L,165,cooking oil,
+Mustard Oil,1L,175,cooking oil,
+Groundnut Oil,1L,210,cooking oil,
+Ghee,500g,320,dairy,cow ghee
+Milk,1L,58,dairy,amul brand - perishable - deliver same day
+Paneer,200g,80,dairy,perishable
+Curd,400g,35,dairy,perishable
+Butter,100g,58,dairy,
+Fresh Tomatoes,1kg,35,vegetables,perishable
+Onions,1kg,28,vegetables,perishable
+Potatoes,1kg,25,vegetables,perishable
+Green Chillies,100g,15,vegetables,perishable
+Coriander Leaves,1 bunch,10,vegetables,perishable
+Bananas,1 dozen,60,fruits,perishable
+Apples,1kg,180,fruits,perishable
+Tea Powder,250g,140,beverages,
+Instant Coffee,100g,220,beverages,
+Biscuits Pack,200g,30,snacks,
+Dry Fruits Mixed Pack,500g,850,snacks,cashew almond raisin mix

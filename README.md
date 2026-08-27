@@ -19,6 +19,12 @@ tracks what's built and what's still mocked.
   CI (ruff/mypy/pytest/gitleaks), Ed25519 keys + `did:key` identifiers, RFC
   8785 (JCS) canonicalization, the SSE event bus, and the hash-chained
   ledger (`append_event` / `verify_chain`).
+- **Phase 2 (done):** catalog ingest via a **live** VLM call (Gemini, via a
+  swappable `LLMClient` adapter — see below), deterministic normalisation
+  (unit parsing, category mapping, dedupe), and the confidence gate
+  (`needs_review`). Both seed catalogs (`catalog_grocery.json`,
+  `catalog_jewellery.json`, 40 SKUs each) were built by running master CSVs
+  through the real pipeline against the real Gemini API — not hand-authored.
 
 ## What's real vs mocked (so far)
 
@@ -31,6 +37,23 @@ tracks what's built and what's still mocked.
   [Redis Cloud](https://redis.io/cloud) (free tier) rather than Railway's
   bundled addons; the API itself still deploys to Railway. Local dev uses
   `docker-compose.yml` with local Postgres/Redis containers.
+- **Catalog extraction (VLM):** live, real API calls to Gemini
+  (`gemini-2.5-flash`) via `adapters/llm.py`'s `LLMClient` Protocol —
+  `GeminiLLMClient` is one implementation; `FakeLLMClient` (used by every
+  automated test, so CI needs no network or API key) and a clear
+  `UnimplementedLLMClient` placeholder for swapping in another provider are
+  the others. **Known limitation:** the free-tier Gemini API key used here
+  is capped at roughly 20 requests/day for `gemini-2.5-flash` — comfortably
+  enough to build both seed catalogs once, but `make ingest` against the
+  full `raw/` folder can hit `429 RESOURCE_EXHAUSTED` if run repeatedly in a
+  short window. The pipeline handles this correctly (each file's error is
+  reported individually; the batch doesn't crash), but a live demo should
+  either use a key with billing enabled or avoid re-running ingestion
+  right before presenting.
+- **Seed images:** `printed_price_list.png` and `handwritten_price_list.png`
+  in `api/praman/seed/raw/` are synthetically generated (`scripts/gen_seed_images.py`,
+  Pillow) stand-ins for a real vendor's phone photos, not actual photographs —
+  disclosed here rather than passed off as real.
 
 ## Quickstart (local dev)
 

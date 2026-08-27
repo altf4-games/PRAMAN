@@ -68,3 +68,51 @@ encrypted with Fernet, keyed by a symmetric secret derived from a single
 `APP_SECRET` setting (SHA-256 → base64), rather than a full KMS/envelope
 encryption setup. Adequate for a hackathon-scoped demo; a real deployment
 would use a managed KMS.
+
+## Phase 2 — Catalog ingest via VLM
+
+**Decision:** live LLM calls (Gemini, via `adapters/llm.py`), not the
+spec's own suggested fallback of shipping only pre-extracted JSON so the
+demo never depends on a model call — per explicit user instruction. The
+adapter is a `LLMClient` Protocol exactly like `RazorpayClient`, so the
+provider is a one-line change in `get_llm_client()`; `FakeLLMClient` is
+what every automated test actually exercises, so CI has no network or key
+dependency even though the real pipeline does.
+
+**Decision:** the LLM extracts a field's value AND its own confidence in
+that value; a separate deterministic step (`normalise.py`) never
+second-guesses the model's confidence number, only its formatting (units,
+category vocabulary, duplicates). The first version of the confidence gate
+naively required every one of the 8 extracted fields to clear the
+threshold — which meant a nullable field like `stock` (never present in a
+plain price list, so honestly reported at 0.0 confidence) sent every
+single product to review, regardless of how legible the source was. Fixed
+by excluding a nullable field from the gate check specifically when its
+extracted value is `None`: a correctly-absent value carries no risk of
+being *wrong* the way a shaky price reading does. See
+`normalise.apply_confidence_gate`.
+
+**Decision:** the two seed catalogs (`catalog_grocery.json`,
+`catalog_jewellery.json`) are built from master CSVs
+(`api/praman/seed/masters/`) run through the live pipeline once, then
+committed as static JSON — not regenerated on every run. This keeps the
+demo's catalog stable and avoids depending on a live model call (and a
+finite free-tier quota, see README) at demo time, while still having
+actually used the live model to produce them, rather than being
+hand-authored. Master CSVs live in a directory separate from
+`api/praman/seed/raw/`'s messy demo fixtures deliberately: the first
+implementation put them in the same directory, and `dedupe_products`
+correctly recognised the messy fixtures' "Toor Dal", "Basmati Rice", etc.
+as duplicates of the master CSV's clean entries — silently keeping the
+higher-confidence master copy and dropping every review-worthy example
+`make ingest` was supposed to demonstrate. Separating the two directories
+fixed it structurally rather than special-casing dedupe.
+
+**Decision:** the Gemini adapter retries only on `ServerError` (transient
+5xx, e.g. "high demand") with exponential backoff, never on the client
+error (429 quota-exhausted, 4xx malformed request) — those are not
+transient and retrying would just burn more of a small free-tier daily
+quota for no benefit. `ingest_directory`/`build_catalog_from_csv` catch any
+exception per source file and record it as a result error rather than
+crashing the batch, so one flaky or quota-exhausted call doesn't take down
+the whole ingest run.
