@@ -478,6 +478,27 @@ status is ever *first* set by the webhook arriving. Verifies the HMAC
 signature before touching the payload at all, exactly like the inbound
 Twilio webhook does.
 
+**Finding from local testing (not fixed — left for Phase 9's harness to
+measure honestly, per CLAUDE.md's "never tune after seeing results"
+rule):** no SKU in either committed seed catalog can score `green` under
+`reversibility_score_detailed`, and no grocery SKU ever can, structurally.
+Grocery items are `perishable`/`consumable` with `return_window_days` 0-2
+(Phase 2's own catalog spec, since perishables genuinely can't have long
+return windows), and `f_return` alone is 35% of the score. Even a
+hypothetical grocery item with the best possible price and fulfilment
+speed tops out around 0.69 — below the 0.75 green threshold — because
+`f_return` caps at `0.35 × (2/14) ≈ 0.05` regardless of anything else. The
+committed jewellery catalog's non-personalised "stock" items all carry
+`return_window_days=7` (the spec described a 7-15 day range; the seed data
+never varied it), which similarly caps them around 0.6-0.7. In practice,
+this means the demo's `/live` page will only ever show amber and red
+carts from the real catalogs, never a green one, unless the operator
+constructs one by hand. `harness/labels.json` labels 25 carts "green" by
+independent human/AI reasoning (e.g. a single `toor-dal-1kg` purchase) —
+those will very likely disagree with the deterministic score once Phase 9
+actually runs the comparison, which is exactly the honest accuracy gap the
+harness exists to surface, not something to quietly fix beforehand.
+
 **Not built in this phase, by design:** a full re-quote-and-retry loop for
 `substitution_accept` — it re-points the cart at the accepted product and
 tells the caller to request a fresh quote and call `checkout_execute`
