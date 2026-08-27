@@ -350,6 +350,10 @@ def create_and_capture_order(
 
     # `client` is already a FakeRazorpayClient — capture through it
     # directly so its own `_payments` dict actually holds this payment for
-    # a later `refund_payment` call to find.
+    # a later `refund_payment` call to find. The isinstance branch above
+    # is the only other concrete implementation of the Protocol, so this
+    # assert documents (and lets mypy verify) the invariant rather than
+    # silently relying on a duck-typed `simulate_payment` on the Protocol.
+    assert isinstance(client, FakeRazorpayClient)
     payment = client.simulate_payment(order.order_id)
     return order, payment, "fake"

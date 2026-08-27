@@ -25,6 +25,7 @@ dependencies = [
     "httpx>=0.27",
     "apscheduler>=3.10",
     "fastmcp>=2.0",
+    "weasyprint>=62.0",
 ]
 
 [project.optional-dependencies]
@@ -62,6 +63,10 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = "apscheduler.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "weasyprint.*"
 ignore_missing_imports = true
 
 [build-system]

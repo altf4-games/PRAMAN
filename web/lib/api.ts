@@ -177,6 +177,7 @@ export interface DisputePackOut {
   cart_mandate: Record<string, unknown>;
   order: Record<string, unknown> | null;
   gate_trail: Array<Record<string, unknown>>;
+  quote_provenance: Array<Record<string, unknown>>;
   reversibility_breakdown: Record<string, number>;
   band: "green" | "amber" | "red";
   ledger: {
@@ -193,6 +194,9 @@ export interface DisputePackOut {
     }>;
     chain_verified: boolean;
   };
+  merchant_did: string | null;
+  pack_hash: string;
+  merchant_signature: string | null;
 }
 
 export interface MetricsOut {

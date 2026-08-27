@@ -11,20 +11,20 @@ from harness.simulator import SessionResult
 
 
 def _result(**overrides: object) -> SessionResult:
-    defaults: dict[str, object] = dict(
-        session_id="s1",
-        category="benign_green",
-        arm="B",
-        decision="ALLOW",
-        reason_code=None,
-        rule_id=None,
-        band="green",
-        captured_paise=1000,
-        attempted_paise=1000,
-        num_captures=1,
-        latency_ms=5.0,
-        is_attack=False,
-    )
+    defaults: dict[str, object] = {
+        "session_id": "s1",
+        "category": "benign_green",
+        "arm": "B",
+        "decision": "ALLOW",
+        "reason_code": None,
+        "rule_id": None,
+        "band": "green",
+        "captured_paise": 1000,
+        "attempted_paise": 1000,
+        "num_captures": 1,
+        "latency_ms": 5.0,
+        "is_attack": False,
+    }
     defaults.update(overrides)
     return SessionResult(**defaults)  # type: ignore[arg-type]
 

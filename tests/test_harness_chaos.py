@@ -6,11 +6,12 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from harness.chaos import mutate_price, mutate_stock_to_zero
 from praman.crypto import did as did_module
 from praman.crypto.keys import generate_keypair
 from praman.models import Merchant, Product
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from harness.chaos import mutate_price, mutate_stock_to_zero
 
 
 async def _make_product(session: AsyncSession) -> Product:

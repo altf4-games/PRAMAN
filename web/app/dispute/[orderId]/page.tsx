@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { ApiError, api } from "@/lib/api";
+import { API_BASE_URL, ApiError, api } from "@/lib/api";
 import { ReversibilityGauge } from "@/components/ReversibilityGauge";
 import { BandSeal } from "@/components/BandSeal";
 import { GateTrail } from "@/components/GateTrail";
@@ -41,6 +41,9 @@ export default async function DisputePage({
     total_paise?: number;
     agent_sig?: string;
   };
+  // Older, still-deployed backends don't return these fields yet -- default
+  // to empty/undefined rather than crashing on a stale API response.
+  const quoteProvenance = pack.quote_provenance ?? [];
 
   return (
     <div className="mx-auto max-w-4xl px-4 sm:px-6 py-10">
@@ -51,7 +54,15 @@ export default async function DisputePage({
           </p>
           <h1 className="font-display text-3xl">Order {order.id}</h1>
         </div>
-        <DownloadJsonButton data={pack} filename={`dispute-pack-${order.id}.json`} />
+        <div className="flex gap-2">
+          <DownloadJsonButton data={pack} filename={`dispute-pack-${order.id}.json`} />
+          <a
+            href={`${API_BASE_URL}/api/dispute-pack/${order.cart_id}/pdf`}
+            className="border border-ink px-3 py-1.5 font-mono text-xs uppercase tracking-wide hover:bg-paper-raised transition-colors"
+          >
+            Export PDF
+          </a>
+        </div>
       </div>
 
       <section className="border border-rule p-4 mb-6">
@@ -96,6 +107,23 @@ export default async function DisputePage({
         </section>
       </div>
 
+      {quoteProvenance.length > 0 && (
+        <section className="border border-rule p-4 mb-6">
+          <h2 className="font-mono text-xs uppercase tracking-wider text-ink-muted mb-2">
+            Quote provenance
+          </h2>
+          <dl className="text-sm space-y-1">
+            {quoteProvenance.map((q, i) => (
+              <Row
+                key={i}
+                k={String(q.sku ?? "?")}
+                v={`${q.qty} × ${money(Number(q.unit_price_paise ?? 0))} · issued ${q.issued_at}`}
+              />
+            ))}
+          </dl>
+        </section>
+      )}
+
       {pack.order && (
         <section className="border border-rule p-4 mb-6">
           <h2 className="font-mono text-xs uppercase tracking-wider text-ink-muted mb-2">
@@ -114,6 +142,18 @@ export default async function DisputePage({
             <Row
               k="cancelled_at"
               v={String((pack.order as Record<string, unknown>).cancelled_at ?? "—")}
+            />
+            <Row
+              k="refunded_at"
+              v={String((pack.order as Record<string, unknown>).refunded_at ?? "—")}
+            />
+            <Row
+              k="step-up channel"
+              v={String((pack.order as Record<string, unknown>).stepup_channel ?? "—")}
+            />
+            <Row
+              k="step-up confirmed"
+              v={String((pack.order as Record<string, unknown>).stepup_confirmed_at ?? "—")}
             />
           </dl>
         </section>
@@ -151,6 +191,21 @@ export default async function DisputePage({
             </li>
           ))}
         </ol>
+      </section>
+
+      <section className="mt-6 pt-4 border-t border-rule">
+        <h2 className="font-mono text-xs uppercase tracking-wider text-ink-muted mb-2">
+          Pack signature
+        </h2>
+        <dl className="text-sm space-y-1">
+          <Row k="pack_hash" v={pack.pack_hash ?? "—"} mono />
+          <Row k="merchant" v={pack.merchant_did ?? "—"} mono />
+          <Row
+            k="signature"
+            v={pack.merchant_signature ? `${pack.merchant_signature.slice(0, 24)}…` : "unsigned"}
+            mono
+          />
+        </dl>
       </section>
     </div>
   );

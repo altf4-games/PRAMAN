@@ -4,12 +4,13 @@ results, not just the ones exercising it directly."""
 
 from __future__ import annotations
 
-from harness.setup import HarnessAdapters, load_catalog, seed_merchant_and_catalog
 from praman.adapters.llm import FakeLLMClient
 from praman.adapters.razorpay_client import FakeRazorpayClient
 from praman.models import Product
 from praman.whatsapp.client import FakeWhatsAppClient
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from harness.setup import HarnessAdapters, load_catalog, seed_merchant_and_catalog
 
 
 def test_load_catalog_grocery_and_jewellery_are_nonempty() -> None:

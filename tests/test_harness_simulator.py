@@ -10,11 +10,12 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import fakeredis.aioredis
+from praman.core.registry import LocalRegistry
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from harness.sessions import GROCERY_SKUS, SessionSpec
 from harness.setup import HarnessAdapters, seed_merchant_and_catalog
 from harness.simulator import run_session_both_arms
-from praman.core.registry import LocalRegistry
-from sqlalchemy.ext.asyncio import AsyncSession
 
 NOW = datetime(2026, 9, 1, 10, 0, 0, tzinfo=UTC)
 

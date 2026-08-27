@@ -279,9 +279,13 @@ class DisputePackOut(BaseModel):
     cart_mandate: dict[str, object]
     order: dict[str, object] | None
     gate_trail: list[dict[str, object]]
+    quote_provenance: list[dict[str, object]]
     reversibility_breakdown: dict[str, float]
     band: str
     ledger: dict[str, object]
+    merchant_did: str | None
+    pack_hash: str
+    merchant_signature: str | None
 
 
 # --- metrics (frontend plumbing for `/` 's live counter and `/metrics`) ---
