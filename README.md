@@ -27,14 +27,16 @@ repo.)
   (`needs_review`). Both seed catalogs (`catalog_grocery.json`,
   `catalog_jewellery.json`, 40 SKUs each) were built by running master CSVs
   through the real pipeline against the real Gemini API — not hand-authored.
-- **Phase 3 (backend done; live phone test pending):** the WhatsApp vendor
-  onboarding state machine (`NEW → AWAITING_MEDIA → EXTRACTING →
-  CONFIRMING_ITEMS → SETTING_POLICY → LIVE`), the `POST /wa/webhook` inbound
-  handler with real Twilio signature verification, and a swappable
-  `WhatsAppClient` adapter (see below) are built and fully unit-tested
-  end to end via `FakeWhatsAppClient`. The "from a real phone in under two
-  minutes" acceptance criterion still needs a Twilio sandbox account and a
-  join-code text from an actual phone — not yet done.
+- **Phase 3 (backend done; inbound proven live, outbound blocked by Twilio
+  account tier):** the WhatsApp vendor onboarding state machine (`NEW →
+  AWAITING_MEDIA → EXTRACTING → CONFIRMING_ITEMS → SETTING_POLICY → LIVE`),
+  the `POST /wa/webhook` inbound handler, and a swappable `WhatsAppClient`
+  adapter. Tested live against a real Twilio trial account over an ngrok
+  tunnel from a real phone: **inbound fully works** — real signature
+  verification, merchant creation, and state transitions all ran correctly
+  against Twilio's actual infrastructure. **Outbound replies are blocked**,
+  not by our code but by Twilio's own account tier — see "What's real vs
+  mocked" below.
 
 ## What's real vs mocked (so far)
 
@@ -64,15 +66,42 @@ repo.)
   in `api/praman/seed/raw/` are synthetically generated (`scripts/gen_seed_images.py`,
   Pillow) stand-ins for a real vendor's phone photos, not actual photographs —
   disclosed here rather than passed off as real.
-- **WhatsApp:** Twilio's WhatsApp **Sandbox** — needs a one-time join code
-  texted from a real phone (a genuine limitation, not a shortcut; stated
-  plainly since this is the standard way anyone tries Twilio's WhatsApp
-  integration without a business-verified sender). The Sandbox also has no
-  native interactive buttons without a pre-approved content template, so
-  every "[Yes] [No]" / "[₹500] [₹2,000] [₹5,000]" in the onboarding script
-  is sent as plain text with an explicit reply instruction instead. See
-  `whatsapp/client.py` and `whatsapp/onboarding.py`, and
-  `ARCHITECTURE.md`'s Phase 3 section for the rest of the tradeoffs.
+- **WhatsApp:** Twilio's newer self-service WhatsApp trial — needs a
+  one-time join code texted from a real phone (a genuine limitation, not a
+  shortcut; the standard way anyone tries Twilio's WhatsApp integration
+  without a business-verified sender). Confirmed live, end to end, over an
+  ngrok tunnel from a real phone:
+  - **Inbound works fully and for real** — Twilio's actual signature was
+    verified (not faked), a real `Merchant` was created, and the state
+    machine correctly transitioned `NEW → AWAITING_MEDIA`.
+  - **Outbound is blocked at the Twilio account level, not in our code.**
+    This account type requires every outbound WhatsApp message — even a
+    same-session reply, not just a business-initiated one outside the
+    24-hour window — to carry a pre-approved Content Template `ContentSid`.
+    Freeform `body` sends fail with `400 ContentSid Required`. Managing
+    templates needs the Content API, which itself returned `401 This
+    feature is not available on a Trial account. Please upgrade your
+    account to gain access.` A generic public example template SID from
+    Twilio's own quickstart docs was also tried and rejected (`400 The
+    ContentSid is Invalid` — it isn't provisioned on this account). This is
+    a real, verified platform constraint of this specific Twilio trial
+    tier — the classic long-standing WhatsApp Sandbox (what the build spec
+    assumed) allows freeform sandbox replies; this newer self-service trial
+    flow does not, until the account is upgraded with billing.
+  - `RealTwilioClient.send_text` is implemented correctly and would work
+    immediately once the account is upgraded — nothing in the adapter needs
+    to change. Every automated test uses `FakeWhatsAppClient`, so this
+    limitation doesn't affect CI or the ability to demo the full state
+    machine (confirming items, setting policy, reaching `LIVE`) — it's
+    specifically the "watch a real WhatsApp reply arrive" moment that's
+    blocked pending an account upgrade.
+
+  The Sandbox/trial also has no native interactive buttons without an
+  approved content template, so every "[Yes] [No]" / "[₹500] [₹2,000]
+  [₹5,000]" in the onboarding script is sent as plain text with an explicit
+  reply instruction instead. See `whatsapp/client.py`,
+  `whatsapp/onboarding.py`, and `ARCHITECTURE.md`'s Phase 3 section for the
+  rest of the tradeoffs.
 
 ## Quickstart (local dev)
 

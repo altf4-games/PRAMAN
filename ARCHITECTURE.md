@@ -168,3 +168,34 @@ pool executor. Message volume in this system is one bot reply at a time
 (never concurrent under load), so a blocking call is an acceptable
 simplification here — it would not be if this adapter ever needed to send
 at volume.
+
+**Finding (not a decision — a discovered platform constraint):** live
+end-to-end testing over an ngrok tunnel from a real phone against a real
+Twilio trial account revealed that this account type requires **every**
+outbound WhatsApp message, including a same-session reply, to carry a
+pre-approved Content Template `ContentSid` — `messages.create(..., body=...)`
+fails with `400 ContentSid Required`. This is stricter than the WhatsApp
+Business Platform's general 24-hour-customer-service-window rule (which
+the build spec, and Twilio's own quickstart docs, describe: freeform
+replies should be allowed within 24 hours of an inbound message). Managing
+templates needs the Content API, which itself is gated: `client.content.v1
+.contents.list()` returns `401 This feature is not available on a Trial
+account. Please upgrade your account to gain access.` A generic public
+example `ContentSid` from Twilio's own docs was also tried directly against
+`messages.create` and rejected as not provisioned on this account (`400
+The ContentSid is Invalid`). Two independent live API calls, not a config
+mistake on our side — confirmed by first fixing an actual bug (the `From`
+number defaulted to the classic Sandbox number `+14155238886` instead of
+this trial's assigned number) and observing the same error persist.
+
+Conclusion: the classic, long-lived Twilio "WhatsApp Sandbox" (what
+CLAUDE.md's stack table names) allows freeform sandbox replies without
+templates; this newer self-service "Twilio Console trial" flow — what
+`console.twilio.com`'s current WhatsApp onboarding actually creates for a
+new signup — does not, until the account is upgraded with a payment method.
+`RealTwilioClient` and `whatsapp/onboarding.py` are implemented correctly
+against the documented API and require no code change once upgraded;
+inbound webhook handling (signature verification, merchant creation, state
+transitions) was independently confirmed fully working live. Per the
+user's decision, the project proceeds without the account upgrade — this
+is disclosed in the README rather than worked around.
