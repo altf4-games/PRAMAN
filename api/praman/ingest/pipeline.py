@@ -31,7 +31,7 @@ _IMAGE_MIME_BY_SUFFIX = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "im
 # Restocking cost isn't something a model reads off a price list — it's a
 # merchant-economics assumption. Deterministic default by category_class,
 # overridable later once a merchant states their actual policy.
-_DEFAULT_RESTOCKING_COST_PCT: dict[str, float] = {
+DEFAULT_RESTOCKING_COST_PCT: dict[str, float] = {
     "perishable": 0.0,
     "consumable": 0.0,
     "digital": 0.0,
@@ -92,14 +92,14 @@ async def ingest_directory(llm: LLMClient, directory: Path) -> IngestResult:
     return result
 
 
-def _slugify(name: str) -> str:
+def slugify(name: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
     return slug or "item"
 
 
 def to_catalog_entry(product: ExtractedProduct) -> dict[str, object]:
     return {
-        "sku": _slugify(product.name),
+        "sku": slugify(product.name),
         "name": product.name,
         "category": product.category,
         "category_class": product.category_class,
@@ -107,7 +107,7 @@ def to_catalog_entry(product: ExtractedProduct) -> dict[str, object]:
         "stock": product.stock,
         "return_window_days": product.return_window_days,
         "fulfilment_hours": product.fulfilment_hours,
-        "restocking_cost_pct": _DEFAULT_RESTOCKING_COST_PCT[product.category_class],
+        "restocking_cost_pct": DEFAULT_RESTOCKING_COST_PCT[product.category_class],
         "is_personalised": product.is_personalised,
         "field_confidence": product.field_confidence,
         "needs_review": product.needs_review,

@@ -5,9 +5,11 @@ his shop is a signed, agent-readable storefront that AI shopping agents can
 transact with — gated by a reversibility-scaled policy engine and backed by
 a hash-chained, exportable dispute ledger.
 
-Full build spec: [CLAUDE.md](CLAUDE.md). This README fills in as each phase
-lands (see §7 of the spec for its eventual final structure); for now it
-tracks what's built and what's still mocked.
+This README fills in as each phase lands (see the eventual final structure
+in the project's own notes); for now it tracks what's built and what's
+still mocked. (The build spec this project follows, `CLAUDE.md`, is an
+AI-agent instruction file kept locally and intentionally not part of this
+repo.)
 
 ## Status
 
@@ -25,6 +27,14 @@ tracks what's built and what's still mocked.
   (`needs_review`). Both seed catalogs (`catalog_grocery.json`,
   `catalog_jewellery.json`, 40 SKUs each) were built by running master CSVs
   through the real pipeline against the real Gemini API — not hand-authored.
+- **Phase 3 (backend done; live phone test pending):** the WhatsApp vendor
+  onboarding state machine (`NEW → AWAITING_MEDIA → EXTRACTING →
+  CONFIRMING_ITEMS → SETTING_POLICY → LIVE`), the `POST /wa/webhook` inbound
+  handler with real Twilio signature verification, and a swappable
+  `WhatsAppClient` adapter (see below) are built and fully unit-tested
+  end to end via `FakeWhatsAppClient`. The "from a real phone in under two
+  minutes" acceptance criterion still needs a Twilio sandbox account and a
+  join-code text from an actual phone — not yet done.
 
 ## What's real vs mocked (so far)
 
@@ -54,6 +64,15 @@ tracks what's built and what's still mocked.
   in `api/praman/seed/raw/` are synthetically generated (`scripts/gen_seed_images.py`,
   Pillow) stand-ins for a real vendor's phone photos, not actual photographs —
   disclosed here rather than passed off as real.
+- **WhatsApp:** Twilio's WhatsApp **Sandbox** — needs a one-time join code
+  texted from a real phone (a genuine limitation, not a shortcut; stated
+  plainly since this is the standard way anyone tries Twilio's WhatsApp
+  integration without a business-verified sender). The Sandbox also has no
+  native interactive buttons without a pre-approved content template, so
+  every "[Yes] [No]" / "[₹500] [₹2,000] [₹5,000]" in the onboarding script
+  is sent as plain text with an explicit reply instruction instead. See
+  `whatsapp/client.py` and `whatsapp/onboarding.py`, and
+  `ARCHITECTURE.md`'s Phase 3 section for the rest of the tradeoffs.
 
 ## Quickstart (local dev)
 

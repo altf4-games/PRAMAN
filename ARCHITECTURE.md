@@ -116,3 +116,55 @@ quota for no benefit. `ingest_directory`/`build_catalog_from_csv` catch any
 exception per source file and record it as a result error rather than
 crashing the batch, so one flaky or quota-exhausted call doesn't take down
 the whole ingest run.
+
+## Phase 3 — WhatsApp vendor onboarding
+
+**Decision:** every "[Yes] [No]" / "[₹500] [₹2,000] [₹5,000]" button in the
+spec's onboarding script is sent as plain WhatsApp text with an explicit
+reply instruction ("Reply YES...", "Reply 1 for ₹500..."), not a native
+interactive button. Twilio's WhatsApp **Sandbox** doesn't support
+interactive buttons without a pre-approved WhatsApp Business content
+template — that's a real constraint of the free sandbox, disclosed in the
+README, not a shortcut taken for convenience.
+
+**Decision:** `WhatsAppClient` is a Protocol (`RealTwilioClient` /
+`FakeWhatsAppClient`), same pattern as `RazorpayClient` and `LLMClient`.
+`FakeWhatsAppClient` implements the *actual* Twilio webhook-signing
+algorithm (HMAC-SHA1 over `url + sorted-concatenated params`, base64) so
+`verify_webhook_signature` tests exercise real verification logic without
+a network call — and a signature it produces verifies correctly against
+`RealTwilioClient` (backed by Twilio's own `RequestValidator`), proven by
+`test_webhook_accepts_correctly_signed_request`.
+
+**Decision:** correcting a flagged catalog item during `CONFIRMING_ITEMS`
+is deliberately simple: reply "YES" to confirm as-is; otherwise, if the
+reply contains a parseable rupee amount it corrects the price, else the
+whole reply text becomes the corrected product name. The spec's script
+("taps or types a correction") doesn't specify which field a free-text
+correction targets, and a real per-field correction UI needs actual
+WhatsApp List/Button messages (not available in the sandbox — see above).
+This simple rule covers the two most common real corrections (wrong price,
+misread name) without a multi-turn "which field?" sub-dialogue.
+
+**Decision:** `SETTING_POLICY` covers two sequential questions (spend
+limit, then cooling-off hold) despite being one state in the spec's state
+list — tracked by whether `agent_policy["max_txn_paise"]` is already set,
+rather than adding a `SETTING_POLICY_SPEND` / `SETTING_POLICY_COOLING_OFF`
+state pair. Keeps the state list matching the spec's literal five states.
+
+**Decision:** a vendor's photos are processed as soon as they arrive in
+one inbound webhook call (whatever `NumMedia` Twilio delivers in that
+request) — there's no debounce window waiting for "are you done sending?".
+If a vendor sends multiple separate messages each containing photos, each
+batch is extracted and appended to the catalog independently, and the
+"Found N items..." summary is sent again per batch. A production version
+would debounce for a few seconds after the last inbound media message
+before extracting; this is a deliberate scope simplification, not an
+oversight.
+
+**Decision:** `RealTwilioClient.send_text` calls the synchronous `twilio`
+SDK directly inside an `async def` rather than wrapping it in a thread
+pool executor. Message volume in this system is one bot reply at a time
+(never concurrent under load), so a blocking call is an acceptable
+simplification here — it would not be if this adapter ever needed to send
+at volume.

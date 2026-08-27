@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from praman.api.routes_events import router as events_router
+from praman.api.routes_whatsapp import router as whatsapp_router
 from praman.config import get_settings
 from praman.db import init_models
 
@@ -31,6 +32,7 @@ app.add_middleware(
 )
 
 app.include_router(events_router, prefix="/api")
+app.include_router(whatsapp_router)
 
 
 @app.get("/health")
