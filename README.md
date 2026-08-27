@@ -11,6 +11,10 @@ still mocked. (The build spec this project follows, `CLAUDE.md`, is an
 AI-agent instruction file kept locally and intentionally not part of this
 repo.)
 
+**Live API:** [https://praman-production.up.railway.app](https://praman-production.up.railway.app)
+(`/health`, `/.well-known/agent-commerce.json`) — Railway, backed by Neon
+Postgres and Redis Cloud. No frontend yet (Phase 7).
+
 ## Status
 
 - **Phase 0 (done):** Razorpay TEST MODE spike. Order creation and webhook
@@ -59,7 +63,7 @@ repo.)
   isolation, two ordering tests, two fail-closed tests). `harness/labels.json`
   — 60 hand-reasoned carts committed now, untouched until Phase 9 measures
   the formula against them — see the honesty note in ARCHITECTURE.md.
-- **Phase 6 (done; Railway/Neon/Redis Cloud deploy still pending):**
+- **Phase 6 (done; deployed to Railway/Neon/Redis Cloud):**
   `core/checkout.py` orchestrates what happens after the gate decides — an
   order is created only after ALLOW or HOLD, never on BLOCK/SUBSTITUTE, and
   ESCALATE creates a payment-free `pending_approval` order. Cooling-off
@@ -97,12 +101,18 @@ repo.)
   default (confirmed: 404). See `scripts/spike_razorpay.py`.
 - **Infra:** Postgres is [Neon](https://neon.tech) (free tier) and Redis is
   [Redis Cloud](https://redis.io/cloud) (free tier) rather than Railway's
-  bundled addons; the API itself still deploys to Railway. Local dev uses
-  `docker-compose.yml` with local Postgres/Redis containers. Every
-  automated test runs against `fakeredis` (an in-memory Redis emulator, not
-  a mock) rather than a real Redis instance — nonce replay protection,
-  nonce/hold TTLs, and quote stock holds are exercised for real, just
-  without a server to run.
+  bundled addons; the API itself deploys to Railway
+  (`https://praman-production.up.railway.app`, live) — real, not mocked.
+  Local dev uses `docker-compose.yml` with local Postgres/Redis containers
+  (also exercised for real: the full green/amber/red reversibility ladder,
+  including the Twilio-signature-verified WhatsApp buyer-undo and
+  merchant-approval webhooks, was run end to end against a local
+  docker-compose Postgres+Redis stack before deploying, and again against
+  the live Railway/Neon/Redis Cloud stack after — see ARCHITECTURE.md's
+  Phase 6 section). Every automated test runs against `fakeredis` (an
+  in-memory Redis emulator, not a mock) rather than a real Redis instance —
+  nonce replay protection, nonce/hold TTLs, and quote stock holds are
+  exercised for real, just without a server to run.
 - **Catalog extraction (VLM):** live, real API calls to Gemini
   (`gemini-2.5-flash`) via `adapters/llm.py`'s `LLMClient` Protocol —
   `GeminiLLMClient` is one implementation; `FakeLLMClient` (used by every

@@ -506,3 +506,49 @@ again, rather than doing that chaining server-side. A substitute is a
 different product with its own live price/stock; giving it its own signed
 quote (rather than synthesizing one) keeps R05/R06/R07 checking a quote
 that's genuinely fresh, not one this route manufactured.
+
+### Deploy — Railway + Neon + Redis Cloud
+
+**Decision (a real build bug, caught by the first Railway deploy attempt):**
+`Dockerfile`'s `apt-get install` listed `libgdk-pixbuf2.0-0` (a WeasyPrint/
+Cairo dependency for the eventual Phase 8 PDF dispute pack). Railway's
+build image runs a newer Debian release than was current when this line
+was written, where that exact package name has "no installation
+candidate" — it was renamed upstream to `libgdk-pixbuf-2.0-0`. Confirmed
+via `apt-cache search` inside the same base image before touching the
+Dockerfile, then verified with a full local `docker build` before
+redeploying, rather than iterating blind against Railway's build queue.
+
+**Deploy sequence actually used:** `railway login` (browser OAuth — the
+CLI opened the system browser, which already had an active Railway
+session, so no password was ever typed into anything this session
+controlled) → `railway init` → `railway up` → fix the Dockerfile bug above
+→ `railway up` again → `railway domain` to provision
+`praman-production.up.railway.app` → set `PUBLIC_BASE_URL` to that domain
+(the app reads it for the Twilio webhook signature check and the
+`/.well-known/agent-commerce.json` manifest) → redeploy. Every other env
+var (`DATABASE_URL` → Neon, `REDIS_URL` → Redis Cloud, Razorpay/Twilio/
+Gemini credentials) was set from the same values already in the local
+`.env`, kept in sync manually rather than via a `railway.toml` (not
+written this phase — the CLI's own variable/domain commands covered
+everything needed).
+
+**Verification, not just "the build succeeded":** after deploy, the exact
+same green→amber(+buyer WhatsApp undo, real Twilio-signature-verified
+`/wa/webhook` call)→red(+merchant WhatsApp approve, same route) smoke
+flow that was run locally against docker-compose Postgres/Redis was
+re-run against the live `praman-production.up.railway.app` URL, with real
+signed REST requests end to end. All three passed, confirming Neon and
+Redis Cloud are reachable from Railway's network, migrations ran
+correctly on container start (`Dockerfile`'s `CMD` runs `alembic upgrade
+head` before `uvicorn`), and the Twilio HMAC signature check works
+against the real `PUBLIC_BASE_URL`.
+
+**Note:** this sandbox's own outbound network is restricted to HTTPS
+(port 443) — direct TCP connections to Neon's Postgres port (5432) timed
+out when tested from here, though a later attempt through what may have
+been a different connection path succeeded (seeding data directly against
+Neon did work). This didn't block anything: Railway's own network reaches
+both Neon and Redis Cloud without restriction, which is the only thing
+that actually matters for the deployed app, and `railway`/`curl` calls
+(all HTTPS) worked throughout.
