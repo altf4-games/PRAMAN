@@ -96,9 +96,23 @@ async def verify_agent_request(
     nonce: str,
     signature: str,
     now: datetime,
+    skip_nonce_check: bool = False,
 ) -> GateResult:
     """R01 (signature) + R02 (registered/not revoked) territory, plus the
-    replay/skew checks that guard them. Ordered; first failure wins."""
+    replay/skew checks that guard them. Ordered; first failure wins.
+
+    `skip_nonce_check` also skips the clock-skew check, and exists for
+    exactly one caller: `gate.py` re-running the whole chain after a
+    merchant's WhatsApp Approve satisfies R08. That re-run reuses the
+    agent's *original* signed request (the server has no way to re-sign as
+    the agent — it never holds the agent's private key), whose nonce was
+    already consumed marking the first pass, and whose timestamp is
+    naturally minutes old by the time a human approves. Neither check is
+    meaningful here: this is not a new, untrusted request replaying an old
+    signature to bypass auth, or a stale request pretending to be fresh —
+    it's the server continuing the same already-authenticated request it
+    already checked once. Only this specific internal path may set this;
+    anything reachable from an actual inbound HTTP request must never."""
     record = await registry.resolve(agent_did)
     if record is None:
         return GateResult(
@@ -129,27 +143,35 @@ async def verify_agent_request(
             rule_id="R01",
         )
 
-    skew_seconds = abs((now - request_time).total_seconds())
-    if skew_seconds > AGENT_CLOCK_SKEW_TOLERANCE_S:
-        return GateResult(
-            decision="BLOCK",
-            reason_code="CLOCK_SKEW_EXCEEDED",
-            detail=f"request timestamp is {skew_seconds:.1f}s from server time "
-            f"(tolerance: {AGENT_CLOCK_SKEW_TOLERANCE_S}s).",
-            remedy="Resynchronise the client clock and retry with a fresh timestamp.",
-            rule_id="R01",
-        )
+    if not skip_nonce_check:
+        # Same rationale as the nonce skip below: a merchant-approval retry
+        # replays the agent's *original* timestamp, which is naturally
+        # minutes old by the time a human gets around to approving — the
+        # skew check exists to catch a stale/replayed *external* request,
+        # not to penalize a legitimate approval delay on an already-
+        # authenticated one.
+        skew_seconds = abs((now - request_time).total_seconds())
+        if skew_seconds > AGENT_CLOCK_SKEW_TOLERANCE_S:
+            return GateResult(
+                decision="BLOCK",
+                reason_code="CLOCK_SKEW_EXCEEDED",
+                detail=f"request timestamp is {skew_seconds:.1f}s from server time "
+                f"(tolerance: {AGENT_CLOCK_SKEW_TOLERANCE_S}s).",
+                remedy="Resynchronise the client clock and retry with a fresh timestamp.",
+                rule_id="R01",
+            )
 
-    nonce_key = f"nonce:{agent_did}:{nonce}"
-    is_new_nonce = await redis.set(nonce_key, "1", nx=True, ex=NONCE_TTL_S)
-    if not is_new_nonce:
-        return GateResult(
-            decision="BLOCK",
-            reason_code="NONCE_REPLAYED",
-            detail=f"nonce {nonce!r} has already been used by agent_did {agent_did!r}.",
-            remedy="Generate a fresh nonce for each request.",
-            rule_id="R01",
-        )
+    if not skip_nonce_check:
+        nonce_key = f"nonce:{agent_did}:{nonce}"
+        is_new_nonce = await redis.set(nonce_key, "1", nx=True, ex=NONCE_TTL_S)
+        if not is_new_nonce:
+            return GateResult(
+                decision="BLOCK",
+                reason_code="NONCE_REPLAYED",
+                detail=f"nonce {nonce!r} has already been used by agent_did {agent_did!r}.",
+                remedy="Generate a fresh nonce for each request.",
+                rule_id="R01",
+            )
 
     message = _signing_message(method, body, timestamp, nonce)
     if not verify(record.public_key, message, signature):

@@ -321,3 +321,74 @@ measurement non-circular, but an AI-authored "hand label" is a materially
 weaker evidentiary claim than a genuine human-reviewed one, and the
 project says so plainly (README "What's real vs mocked") rather than
 presenting these labels as more authoritative than they are.
+
+## Phase 6 — Checkout, cooling-off, substitution, merchant approvals
+
+**Decision (a real bug found and fixed, not just a design choice):**
+re-running the gate after a merchant's WhatsApp Approve reuses the agent's
+*original* signed request — the server never holds the agent's private key
+and can't re-sign as them. That request's nonce was already consumed
+marking the first (ESCALATE) pass, and by the time a human approves,
+minutes have usually elapsed. The first implementation re-ran the full
+R01-R12 chain unconditionally and failed every real approval: the nonce
+tripped `NONCE_REPLAYED`, and even after fixing that, the clock-skew check
+tripped `CLOCK_SKEW_EXCEEDED` against a now-stale original timestamp.
+Fixed by having `GateRequest.human_present=True` also set
+`skip_nonce_check=True` on the R01/R02 call, which skips *both* the nonce
+and skew checks — both exist to catch a stale/replayed *external* request,
+neither is meaningful when the server is deliberately continuing a request
+it already authenticated once. `skip_nonce_check` is documented as safe
+for exactly that one internal caller and must never be reachable from an
+actual inbound HTTP request.
+
+**Decision:** the exact `GateRequest` that produced an ESCALATE is
+serialized into a new `Order.pending_gate_request` JSON column
+(`gate.py`'s `serialize_gate_request`/`deserialize_gate_request`) rather
+than re-deriving one from scratch when the merchant replies. Cart items,
+reversibility inputs, and quotes are all reconstructed byte-for-byte from
+what was actually signed, not re-fetched from current DB state — R04-R07
+re-checking against *current* envelope/price/stock state (while R01's
+signature is checked against the *original* request) is exactly the point
+of re-running the full chain, not a shortcut around it.
+
+**Decision:** `Order.idempotency_key` is deterministic
+(`sha256(cart_id || agent_did)`) and unique-constrained, so a
+merchant-approval retry can never insert a second `Order` row for the same
+cart — it must update the original `pending_approval` row in place.
+`_create_order_row` grew an `existing_order` parameter for exactly this;
+every other caller still inserts fresh. Discovered by first writing the
+naive "always insert" version and hitting the unique constraint in a test.
+
+**Decision (a second real bug, same root cause):** `checkout.py`
+originally computed `now = datetime.now(UTC)` internally instead of
+threading an injected value through, unlike `gate.py`/`envelope.py`'s own
+established discipline. This broke `Order.created_at` under test (used by
+the merchant-approval timeout sweep) and was silently masked until a test
+using a fixed historical `now` collided with the sandbox's real wall
+clock. Fixed by deriving `now` from `gate_req.now` throughout
+`checkout.py`, and by making `whatsapp/approvals.py`'s `handle_merchant_reply`
+accept an optional injectable `now` (defaulting to the real clock in
+production) rather than hardcoding it.
+
+**Decision:** the buyer's cooling-off undo message goes to
+`IntentEnvelope.user_whatsapp`, not the merchant's WhatsApp number — an
+easy mistake since checkout code is already holding a `Merchant` object at
+that point for the message's "from {merchant.name}" text. Caught in code
+review before it shipped, not after a live test; worth naming because it's
+exactly the kind of bug that's invisible until you specifically assert on
+`sent_messages[0].to`.
+
+**Decision:** `RazorpayClient` gained `drive_to_captured` and the module-
+level `create_and_capture_order` helper, reusing the exact real-then-fake
+fallback Phase 0's spike established (attempt the S2S test-card capture;
+on `S2SUnavailableError`, fall back to `FakeRazorpayClient` and report
+which path actually ran). Checkout always goes through this helper rather
+than calling `create_order`/`capture_payment` separately, so the fallback
+logic lives in exactly one place.
+
+**Decision:** substitution's deterministic filter computes each
+candidate's reversibility band using the *same* `reversibility_score_detailed`
+function as the real gate (via a single-item cart against the real
+envelope), not a simplified heuristic — "band no worse than the original"
+needs the actual band the gate would compute, not an approximation that
+could disagree with it.

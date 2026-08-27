@@ -13,7 +13,12 @@ from datetime import UTC, datetime, timedelta
 import fakeredis.aioredis
 import pytest
 from praman.core.envelope import Cart, CartItem
-from praman.core.gate import GateRequest, run_gate
+from praman.core.gate import (
+    GateRequest,
+    deserialize_gate_request,
+    run_gate,
+    serialize_gate_request,
+)
 from praman.core.quotes import QuoteData, issue_quote
 from praman.core.registry import LocalRegistry
 from praman.crypto.keys import generate_keypair, sign
@@ -418,6 +423,66 @@ async def test_r08_fires_step_up_required(
     assert result.decision == "ESCALATE"
     assert result.reason_code == "STEP_UP_REQUIRED"
     assert result.rule_id == "R08"
+
+
+async def test_r08_human_present_bypasses_step_up(
+    db_session: AsyncSession, redis: fakeredis.aioredis.FakeRedis
+) -> None:
+    # Simulates the gate re-run after a merchant's WhatsApp Approve.
+    scenario = await _build_scenario(db_session, redis, envelope_min_reversibility=0.99)
+    registry = LocalRegistry(db_session)
+    req = replace(_request(scenario, db_session), human_present=True)
+
+    result = await run_gate(db_session, redis, registry, req)
+
+    assert result.decision == "ALLOW"
+
+
+async def test_human_present_retry_reuses_the_original_nonce_without_replay_block(
+    db_session: AsyncSession, redis: fakeredis.aioredis.FakeRedis
+) -> None:
+    # First pass escalates (consuming the nonce). The merchant-approval
+    # retry reuses that SAME signed request (the server can't re-sign as
+    # the agent) — it must not trip R01's nonce-replay check.
+    scenario = await _build_scenario(db_session, redis, envelope_min_reversibility=0.99)
+    registry = LocalRegistry(db_session)
+    original_req = _request(scenario, db_session)
+
+    first = await run_gate(db_session, redis, registry, original_req)
+    assert first.decision == "ESCALATE"
+
+    retry_req = replace(original_req, human_present=True)
+    second = await run_gate(db_session, redis, registry, retry_req)
+
+    assert second.decision == "ALLOW"
+
+
+async def test_gate_request_serialization_round_trips_and_re_runs(
+    db_session: AsyncSession, redis: fakeredis.aioredis.FakeRedis
+) -> None:
+    # Simulates persisting a GateRequest to Order.pending_gate_request and
+    # rehydrating it later — the actual whatsapp/approvals.py flow.
+    scenario = await _build_scenario(db_session, redis, envelope_min_reversibility=0.99)
+    registry = LocalRegistry(db_session)
+    original_req = _request(scenario, db_session)
+
+    first = await run_gate(db_session, redis, registry, original_req)
+    assert first.decision == "ESCALATE"
+
+    serialized = serialize_gate_request(original_req)
+    # round-trip through JSON, exactly as a JSON DB column would
+    import json
+
+    round_tripped = json.loads(json.dumps(serialized))
+    rehydrated = deserialize_gate_request(round_tripped, now=NOW)
+
+    assert rehydrated.human_present is True
+    assert rehydrated.agent_did == original_req.agent_did
+    assert rehydrated.cart.items == original_req.cart.items
+    assert rehydrated.quotes[0].quote_id == original_req.quotes[0].quote_id
+
+    second = await run_gate(db_session, redis, registry, rehydrated)
+    assert second.decision == "ALLOW"
 
 
 # --- R09: amber band -> cooling off hold ---

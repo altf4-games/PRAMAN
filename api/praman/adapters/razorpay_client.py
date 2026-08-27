@@ -16,13 +16,29 @@ import hashlib
 import hmac
 import time
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Literal, Protocol
 
 import razorpay
 
 OrderStatus = Literal["created", "attempted", "paid"]
 PaymentStatus = Literal["created", "authorized", "captured", "refunded", "failed"]
+
+_S2S_API_BASE = "https://api.razorpay.com/v1"
+_S2S_TEST_CARD = {
+    "number": "4111111111111111",
+    "expiry_month": "12",
+    "expiry_year": "2030",
+    "cvv": "123",
+    "name": "PRAMAN Checkout",
+}
+
+
+class S2SUnavailableError(Exception):
+    """Razorpay's server-to-server test-card capture isn't enabled on this
+    account (confirmed in the Phase 0 spike: it's opt-in and off by
+    default). Callers catch this and fall back to `FakeRazorpayClient`,
+    logging the fallback explicitly rather than pretending it's real."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,6 +76,8 @@ class RazorpayClient(Protocol):
 
     def verify_webhook_signature(self, body: bytes, signature: str) -> bool: ...
 
+    def drive_to_captured(self, order_id: str, amount_paise: int) -> RazorpayPayment: ...
+
 
 class RealRazorpayClient:
     """Wraps the official `razorpay` SDK against api.razorpay.com in TEST MODE.
@@ -72,6 +90,8 @@ class RealRazorpayClient:
     def __init__(self, key_id: str, key_secret: str, webhook_secret: str) -> None:
         self._client = razorpay.Client(auth=(key_id, key_secret))
         self._webhook_secret = webhook_secret
+        self._key_id = key_id
+        self._key_secret = key_secret
 
     def create_order(
         self, amount_paise: int, currency: str, receipt: str, notes: dict[str, str]
@@ -112,6 +132,41 @@ class RealRazorpayClient:
             return True
         except razorpay.errors.SignatureVerificationError:
             return False
+
+    def drive_to_captured(self, order_id: str, amount_paise: int) -> RazorpayPayment:
+        """Attempts the S2S JSON test-card capture proven out in
+        `scripts/spike_razorpay.py`. Raises `S2SUnavailableError` if the
+        account doesn't have S2S enabled (the confirmed default) rather
+        than silently degrading — the caller decides the fallback."""
+        import requests
+
+        payload: dict[str, Any] = {
+            "amount": amount_paise,
+            "currency": "INR",
+            "email": "checkout@praman.dev",
+            "contact": "9999999999",
+            "order_id": order_id,
+            "method": "card",
+            "card": _S2S_TEST_CARD,
+        }
+        try:
+            resp = requests.post(
+                f"{_S2S_API_BASE}/payments/create/json",
+                json=payload,
+                auth=(self._key_id, self._key_secret),
+                timeout=15,
+            )
+        except requests.RequestException as exc:
+            raise S2SUnavailableError(str(exc)) from exc
+
+        if resp.status_code != 200:
+            raise S2SUnavailableError(f"HTTP {resp.status_code}: {resp.text[:300]}")
+
+        body = resp.json()
+        payment_id = body.get("razorpay_payment_id") or body.get("id")
+        if not payment_id:
+            raise S2SUnavailableError(f"no payment id in response: {body}")
+        return self.fetch_payment(str(payment_id))
 
 
 def _payment_from_resp(resp: dict[str, Any]) -> RazorpayPayment:
@@ -185,6 +240,11 @@ class FakeRazorpayClient:
         order = self._orders[order_id]
         return self.capture_payment(payment_id, order.amount_paise)
 
+    def drive_to_captured(self, order_id: str, amount_paise: int) -> RazorpayPayment:
+        """Mirrors `RealRazorpayClient.drive_to_captured`'s signature so
+        callers don't need to branch on which implementation they hold."""
+        return self.simulate_payment(order_id)
+
 
 def _replace_status(order: RazorpayOrder, status: OrderStatus) -> RazorpayOrder:
     return RazorpayOrder(
@@ -203,3 +263,39 @@ def make_idempotency_key(cart_id: str, agent_did: str) -> str:
 
 def now_ms() -> int:
     return int(time.time() * 1000)
+
+
+def get_razorpay_client(
+    key_id: str, key_secret: str, webhook_secret: str, *, use_fake: bool = False
+) -> RazorpayClient:
+    if use_fake:
+        return FakeRazorpayClient(webhook_secret=webhook_secret or "fake_webhook_secret")
+    return RealRazorpayClient(key_id, key_secret, webhook_secret)
+
+
+def create_and_capture_order(
+    client: RazorpayClient, amount_paise: int, currency: str, receipt: str, notes: dict[str, str]
+) -> tuple[RazorpayOrder, RazorpayPayment, str]:
+    """The order-then-payment sequence checkout needs, with the same
+    real-then-fake fallback Phase 0's spike established. Returns
+    (order, payment, path_used) — 'real' or 'fake' — so the caller can
+    ledger which path actually ran, per CLAUDE.md's honesty rule (never
+    let a demo silently claim to be more real than it is).
+    """
+    order = client.create_order(amount_paise, currency, receipt, notes)
+
+    if isinstance(client, RealRazorpayClient):
+        try:
+            payment = client.drive_to_captured(order.order_id, amount_paise)
+            return order, payment, "real"
+        except S2SUnavailableError:
+            pass  # fall through to the Fake path below, same as Phase 0
+
+    fake = FakeRazorpayClient()
+    fake_order = fake.create_order(amount_paise, currency, receipt, notes)
+    payment = fake.simulate_payment(fake_order.order_id)
+    # Report under the REAL order's id — that's the order of record (the
+    # one whose notes carry the cart_mandate_hash and that webhooks/the
+    # ledger reference), even though capture itself used the Fake path.
+    payment = replace(payment, order_id=order.order_id)
+    return order, payment, "fake"

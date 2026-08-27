@@ -26,6 +26,15 @@ right rule_id. R04 is `envelope.verify_cart_within_envelope`, unchanged.
 R05-R07 are `quotes.verify_quote`, run once per cart item. R08/R09 are
 `reversibility.reversibility_score_detailed` interpreted against the
 envelope's policy and the fixed band thresholds.
+
+R08's `human_present=True` on `GateRequest` satisfies the step-up
+requirement without changing the reversibility score itself — this is how
+a merchant's WhatsApp Approve (`whatsapp/approvals.py`) lets a request
+that was escalated the first time through the gate pass on re-run. It also
+skips R01's nonce-replay check (see `registry.verify_agent_request`'s
+`skip_nonce_check` docstring for why that's safe only here): the re-run
+reuses the agent's original signed request rather than a new one, since
+the server can't re-sign as the agent.
 """
 
 from __future__ import annotations
@@ -35,6 +44,7 @@ import time
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import Any, cast
 
 from redis.asyncio import Redis
 from sqlalchemy import select
@@ -48,7 +58,7 @@ from praman.config import (
     VELOCITY_WINDOW_DEMO_MODE_S,
     VELOCITY_WINDOW_S,
 )
-from praman.core.envelope import Cart, Envelope, verify_cart_within_envelope
+from praman.core.envelope import Cart, CartItem, Envelope, verify_cart_within_envelope
 from praman.core.gate_types import GateResult, allow
 from praman.core.ledger import append_event
 from praman.core.quotes import QuoteData, verify_quote
@@ -76,6 +86,7 @@ class GateRequest:
     quotes: tuple[QuoteData, ...]  # parallel to cart.items
     idempotency_key: str
     now: datetime
+    human_present: bool = False
 
 
 def envelope_from_row(row: IntentEnvelope) -> Envelope:
@@ -89,6 +100,135 @@ def envelope_from_row(row: IntentEnvelope) -> Envelope:
         ceiling_paise=row.ceiling_paise,
         spent_paise=row.spent_paise,
         min_reversibility=row.min_reversibility,
+    )
+
+
+def serialize_gate_request(req: GateRequest) -> dict[str, object]:
+    """Persists the exact signed request that produced an ESCALATE, so a
+    merchant's later WhatsApp Approve can re-run the gate against it (see
+    the module docstring on `human_present`). `body` is hex-encoded since
+    JSON has no bytes type; everything else round-trips as plain JSON."""
+    return {
+        "session_id": req.session_id,
+        "cart_id": req.cart_id,
+        "agent_did": req.agent_did,
+        "method": req.method,
+        "body_hex": req.body.hex(),
+        "timestamp": req.timestamp,
+        "nonce": req.nonce,
+        "signature": req.signature,
+        "envelope_id": req.envelope_id,
+        "cart": {
+            "agent_did": req.cart.agent_did,
+            "items": [
+                {
+                    "sku": item.sku,
+                    "category": item.category,
+                    "qty": item.qty,
+                    "unit_price_paise": item.unit_price_paise,
+                }
+                for item in req.cart.items
+            ],
+        },
+        "reversibility_items": [
+            {
+                "category_class": item.category_class,
+                "is_personalised": item.is_personalised,
+                "return_window_days": item.return_window_days,
+                "fulfilment_hours": item.fulfilment_hours,
+                "restocking_cost_pct": item.restocking_cost_pct,
+            }
+            for item in req.reversibility_items
+        ],
+        "quotes": [
+            {
+                "quote_id": q.quote_id,
+                "product_id": q.product_id,
+                "sku": q.sku,
+                "agent_did": q.agent_did,
+                "merchant_did": q.merchant_did,
+                "unit_price_paise": q.unit_price_paise,
+                "qty": q.qty,
+                "total_paise": q.total_paise,
+                "stock_held": q.stock_held,
+                "issued_at": q.issued_at.isoformat(),
+                "expires_at": q.expires_at.isoformat(),
+                "nonce": q.nonce,
+                "signature": q.signature,
+                "consumed_at": q.consumed_at.isoformat() if q.consumed_at else None,
+            }
+            for q in req.quotes
+        ],
+        "idempotency_key": req.idempotency_key,
+    }
+
+
+def deserialize_gate_request(data: dict[str, object], *, now: datetime) -> GateRequest:
+    """Inverse of `serialize_gate_request`. `now` is always the *current*
+    time at re-run, never the originally-persisted one — R04's expiry
+    check and R05's quote-freshness check must see real elapsed time."""
+    cart_data = data["cart"]
+    assert isinstance(cart_data, dict)
+    cart_items = cast(list[dict[str, Any]], cart_data["items"])
+    cart = Cart(
+        agent_did=str(cart_data["agent_did"]),
+        items=tuple(
+            CartItem(
+                sku=str(i["sku"]),
+                category=str(i["category"]),
+                qty=int(i["qty"]),
+                unit_price_paise=int(i["unit_price_paise"]),
+            )
+            for i in cart_items
+        ),
+    )
+    reversibility_items_data = cast(list[dict[str, Any]], data["reversibility_items"])
+    reversibility_items = tuple(
+        ReversibilityItem(
+            category_class=str(i["category_class"]),
+            is_personalised=bool(i["is_personalised"]),
+            return_window_days=int(i["return_window_days"]),
+            fulfilment_hours=int(i["fulfilment_hours"]),
+            restocking_cost_pct=float(i["restocking_cost_pct"]),
+        )
+        for i in reversibility_items_data
+    )
+    quotes_data = cast(list[dict[str, Any]], data["quotes"])
+    quotes = tuple(
+        QuoteData(
+            quote_id=str(q["quote_id"]),
+            product_id=str(q["product_id"]),
+            sku=str(q["sku"]),
+            agent_did=str(q["agent_did"]),
+            merchant_did=str(q["merchant_did"]),
+            unit_price_paise=int(q["unit_price_paise"]),
+            qty=int(q["qty"]),
+            total_paise=int(q["total_paise"]),
+            stock_held=bool(q["stock_held"]),
+            issued_at=datetime.fromisoformat(str(q["issued_at"])),
+            expires_at=datetime.fromisoformat(str(q["expires_at"])),
+            nonce=str(q["nonce"]),
+            signature=str(q["signature"]),
+            consumed_at=datetime.fromisoformat(str(q["consumed_at"])) if q["consumed_at"] else None,
+        )
+        for q in quotes_data
+    )
+    return GateRequest(
+        session_id=str(data["session_id"]),
+        cart_id=str(data["cart_id"]) if data["cart_id"] is not None else None,
+        agent_did=str(data["agent_did"]),
+        method=str(data["method"]),
+        body=bytes.fromhex(str(data["body_hex"])),
+        timestamp=str(data["timestamp"]),
+        nonce=str(data["nonce"]),
+        signature=str(data["signature"]),
+        envelope_id=str(data["envelope_id"]),
+        cart=cart,
+        reversibility_items=reversibility_items,
+        quotes=quotes,
+        idempotency_key=str(data["idempotency_key"]),
+        now=now,
+        human_present=True,
     )
 
 
@@ -154,6 +294,7 @@ async def _evaluate(
         nonce=req.nonce,
         signature=req.signature,
         now=req.now,
+        skip_nonce_check=req.human_present,
     )
     if auth_result.decision != "ALLOW":
         return auth_result
@@ -218,7 +359,7 @@ async def _evaluate(
         list(req.reversibility_items), req.cart.total_paise, env
     )
     cart_band = band(score)
-    if score < env.min_reversibility:
+    if score < env.min_reversibility and not req.human_present:
         return _escalate(
             "STEP_UP_REQUIRED",
             f"reversibility score {score:.3f} is below the envelope's minimum "

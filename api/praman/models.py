@@ -9,7 +9,7 @@ sqlite) rather than Postgres-specific JSONB, since tests run on sqlite.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import JSON, BigInteger, Boolean, DateTime, Float, ForeignKey, Integer, String, Text
@@ -167,6 +167,16 @@ class Order(Base):
         DateTime(timezone=True), nullable=True
     )
     stepup_channel: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # The exact signed agent request that produced this order, serialized
+    # (see core/gate.py's serialize_gate_request/deserialize_gate_request).
+    # Only ever set for an ESCALATE (pending_approval) order — it's what
+    # lets a merchant's WhatsApp Approve re-run the gate from R01 against
+    # the agent's *original* signature, since the server can never re-sign
+    # as the agent itself.
+    pending_gate_request: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
 
 
 class WhatsAppMessage(Base):

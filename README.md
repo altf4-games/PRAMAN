@@ -59,6 +59,17 @@ repo.)
   isolation, two ordering tests, two fail-closed tests). `harness/labels.json`
   — 60 hand-reasoned carts committed now, untouched until Phase 9 measures
   the formula against them — see the honesty note in ARCHITECTURE.md.
+- **Phase 6 (checkout/cooling-off/substitution/approvals done; REST/MCP/deploy
+  in progress):** `core/checkout.py` orchestrates what happens after the
+  gate decides — an order is created only after ALLOW or HOLD, never on
+  BLOCK/SUBSTITUTE, and ESCALATE creates a payment-free `pending_approval`
+  order. Cooling-off (`core/cooling_off.py`), the merchant WhatsApp
+  approval inbox (`whatsapp/approvals.py` — Approve re-runs the gate from
+  R01 against the *original* signed request and updates the same order in
+  place; Decline closes cleanly; a timeout sweep denies after 15 minutes),
+  and substitution (`core/substitution.py` — deterministic filter first,
+  LLM ranks only the already-safe filtered set, cheapest-first on any LLM
+  failure) are all built and tested. 46 new tests; 214/214 total passing.
 
 ## What's real vs mocked (so far)
 
