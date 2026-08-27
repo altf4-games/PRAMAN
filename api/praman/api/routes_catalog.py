@@ -50,7 +50,17 @@ async def catalog_search(
     if category is not None:
         stmt = stmt.where(Product.category == category)
     if q is not None:
-        stmt = stmt.where(Product.name.ilike(f"%{q}%"))
+        # Real bug found live: matching the whole query as one contiguous
+        # substring meant "1kg toor dal" (word order differs from the
+        # catalog's own "Toor dal (1kg)") returned nothing, even though
+        # "toor dal" alone matched fine — a query an agent (or a person)
+        # phrases completely naturally, one token out of place, silently
+        # returned an empty catalog. Tokenizing and requiring every token
+        # to appear somewhere in the name (order-independent) is standard
+        # search behavior and fixes this without needing full-text search
+        # infrastructure for a catalog this size.
+        for token in q.split():
+            stmt = stmt.where(Product.name.ilike(f"%{token}%"))
     result = await session.execute(stmt.order_by(Product.name))
     return [_to_product_out(p) for p in result.scalars().all()]
 

@@ -158,6 +158,30 @@ async def test_catalog_search_hides_needs_review_products(
     assert resp.status_code == 404
 
 
+async def test_catalog_search_q_matches_regardless_of_word_order(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """A real bug found live: `q` used to match the whole query as one
+    contiguous substring, so "1kg toor dal" (word order differs from the
+    catalog's own "Toor Dal 1kg") returned nothing even though "toor dal"
+    alone matched -- exactly the kind of natural phrasing a real buyer or
+    agent would use."""
+    merchant, _product = await _seed_merchant_and_product(db_session)
+
+    resp = await client.get(
+        "/api/catalog/search", params={"merchant_id": merchant.id, "q": "1kg toor dal"}
+    )
+    assert resp.status_code == 200
+    assert {p["sku"] for p in resp.json()} == {"toor-dal-1kg"}
+
+    # Still correctly excludes an unrelated product even with multiple tokens.
+    resp = await client.get(
+        "/api/catalog/search", params={"merchant_id": merchant.id, "q": "1kg basmati rice"}
+    )
+    assert resp.status_code == 200
+    assert resp.json() == []
+
+
 async def test_policy_get_reflects_onboarding_policy(
     client: AsyncClient, db_session: AsyncSession
 ) -> None:
