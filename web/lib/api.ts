@@ -159,6 +159,15 @@ export interface OrderOut {
   razorpay_key_id: string | null;
 }
 
+export interface AgentRunOut {
+  run_id: string;
+  agent_did: string | null;
+  cart_id: string | null;
+  order_id: string | null;
+  decision: string | null;
+  summary: string;
+}
+
 export interface CheckoutConfirmOut {
   order_id: string;
   status: string;
@@ -281,6 +290,19 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ decision }),
     }),
+
+  agentRun: (body: {
+    run_id: string;
+    goal: string;
+    merchant_id: string;
+    merchant_name: string;
+    user_ref: string;
+    user_whatsapp: string;
+    ceiling_paise: number;
+    max_single_txn_paise: number;
+    allowed_categories: string[];
+    min_reversibility: number;
+  }) => request<AgentRunOut>("/api/agent/run", { method: "POST", body: JSON.stringify(body) }),
 
   disputePack: (cartId: string) => request<DisputePackOut>(`/api/dispute-pack/${cartId}`),
   metrics: () => request<MetricsOut>("/api/metrics"),

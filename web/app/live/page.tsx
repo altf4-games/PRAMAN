@@ -6,6 +6,7 @@ import { signRequest } from "@/lib/sign";
 import { useLedgerStream } from "@/lib/sse";
 import { ReversibilityGauge } from "@/components/ReversibilityGauge";
 import { LedgerStream } from "@/components/LedgerStream";
+import { AgentTrace } from "@/components/AgentTrace";
 import { BandSeal } from "@/components/BandSeal";
 
 interface ToolCall {
@@ -59,6 +60,9 @@ export default function LivePage() {
   const [ceiling, setCeiling] = useState(500_000);
   const [minReversibility, setMinReversibility] = useState(0);
 
+  const [mode, setMode] = useState<"scripted" | "agent">("agent");
+  const [goal, setGoal] = useState("Buy 1kg toor dal");
+
   const [running, setRunning] = useState(false);
   const [calls, setCalls] = useState<ToolCall[]>([]);
   const [cart, setCart] = useState<CartResult | null>(null);
@@ -67,6 +71,8 @@ export default function LivePage() {
   const [postAction, setPostAction] = useState<string | null>(null);
   const [payingLive, setPayingLive] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
+  const [agentRunId, setAgentRunId] = useState<string | null>(null);
+  const [agentError, setAgentError] = useState<string | null>(null);
 
   useEffect(() => {
     api
@@ -91,6 +97,39 @@ export default function LivePage() {
   }, [merchantId]);
 
   const { events, connected } = useLedgerStream(cart ? `cart:${cart.cart_id}` : null);
+  const { events: agentEvents, connected: agentConnected } = useLedgerStream(
+    agentRunId ? `agent:${agentRunId}` : null,
+  );
+
+  // The agent's own tool results are the only place a cart's reversibility
+  // band/score/breakdown and the checkout decision are known in Agent mode
+  // — `POST /api/agent/run` only returns a final summary, not that detail,
+  // so this page reconstructs live state from the same SSE trace it's
+  // already rendering, rather than adding a second round-trip.
+  useEffect(() => {
+    if (mode !== "agent") return;
+    for (const e of agentEvents) {
+      if (e.event_type !== "AGENT_TOOL_RESULT") continue;
+      const p = e.payload as unknown as { tool: string; result: Record<string, unknown> };
+      if (p.tool === "cart_confirm" && typeof p.result.cart_id === "string") {
+        setCart({
+          cart_id: p.result.cart_id,
+          band: p.result.band as CartResult["band"],
+          reversibility_score: p.result.reversibility_score as number,
+          reversibility_breakdown: p.result.reversibility_breakdown as Record<string, number>,
+        });
+      }
+      if (p.tool === "checkout_execute" && typeof p.result.decision === "string") {
+        setCheckout({
+          decision: p.result.decision as string,
+          reason_code: (p.result.reason_code as string) ?? "",
+          detail: (p.result.detail as string) ?? "",
+          order_id: (p.result.order_id as string) ?? null,
+          order_status: (p.result.order_status as string) ?? null,
+        });
+      }
+    }
+  }, [agentEvents, mode]);
 
   function pushCall(label: string) {
     setCalls((prev) => [...prev, { label, status: "pending" }]);
@@ -105,6 +144,54 @@ export default function LivePage() {
       }
       return next;
     });
+  }
+
+  /** The genuine agent path: a live Gemini model, given only the buyer's
+   * goal in natural language, decides for itself which tools to call and
+   * in what order (`POST /api/agent/run`, `agent_runner/runner.py`) — no
+   * scripted call sequence, no button-per-step. Every decision and tool
+   * call streams live over SSE via `agentEvents` above. */
+  async function runAgentDecides() {
+    if (!merchantId) return;
+    setRunning(true);
+    setCart(null);
+    setCheckout(null);
+    setPostAction(null);
+    setAgentError(null);
+    const ref = `web-buyer-${Date.now().toString(36)}`;
+    setUserRef(ref);
+    const runId =
+      typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `run-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+    setAgentRunId(runId);
+
+    const merchant = merchants.find((m) => m.id === merchantId);
+    const categories = [...new Set(products.map((p) => p.category))];
+
+    // Give the SSE subscription (the effect watching `agentRunId`) a beat
+    // to connect before the run starts publishing — otherwise the first
+    // few events could fire before this tab is listening.
+    await new Promise((r) => setTimeout(r, 300));
+
+    try {
+      await api.agentRun({
+        run_id: runId,
+        goal,
+        merchant_id: merchantId,
+        merchant_name: merchant?.name ?? "the shop",
+        user_ref: ref,
+        user_whatsapp: "whatsapp:+919000000000",
+        ceiling_paise: ceiling,
+        max_single_txn_paise: ceiling,
+        allowed_categories: categories,
+        min_reversibility: minReversibility,
+      });
+    } catch (err) {
+      setAgentError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRunning(false);
+    }
   }
 
   async function runSession() {
@@ -273,10 +360,30 @@ export default function LivePage() {
   return (
     <div className="mx-auto max-w-7xl px-4 sm:px-6 py-10">
       <h1 className="font-display text-3xl mb-2">Live agent session</h1>
-      <p className="text-ink-muted max-w-2xl mb-6">
-        Pick a shop and a product, set an envelope, and run a real signed agent session against
-        the live API — every step below is a genuine HTTP call, not a simulation.
+      <p className="text-ink-muted max-w-2xl mb-4">
+        {mode === "agent"
+          ? "A live model decides what to do from a plain-language goal — it picks the tools, the order, and the arguments itself. Nothing below is scripted."
+          : "Pick a shop and a product, set an envelope, and run a real signed agent session against the live API — every step below is a genuine HTTP call, not a simulation."}
       </p>
+
+      <div className="flex gap-2 mb-4" role="tablist" aria-label="Agent mode">
+        {(["agent", "scripted"] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            role="tab"
+            aria-selected={mode === m}
+            onClick={() => setMode(m)}
+            className={`font-mono text-xs uppercase tracking-wide px-3 py-1.5 border transition-colors ${
+              mode === m
+                ? "border-ink bg-ink text-paper"
+                : "border-rule text-ink-muted hover:bg-paper-raised"
+            }`}
+          >
+            {m === "agent" ? "Agent decides" : "Scripted"}
+          </button>
+        ))}
+      </div>
 
       <div className="border border-rule bg-paper-raised p-4 mb-8 grid sm:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
         <Field label="Shop">
@@ -293,19 +400,31 @@ export default function LivePage() {
             ))}
           </select>
         </Field>
-        <Field label="Product">
-          <select
-            value={productId}
-            onChange={(e) => setProductId(e.target.value)}
-            className="w-full border border-rule bg-paper px-2 py-1.5 text-sm font-mono"
-          >
-            {products.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name} — ₹{(p.unit_price_paise / 100).toFixed(0)}
-              </option>
-            ))}
-          </select>
-        </Field>
+        {mode === "agent" ? (
+          <Field label="Goal (plain language)">
+            <input
+              type="text"
+              value={goal}
+              onChange={(e) => setGoal(e.target.value)}
+              placeholder="Buy 1kg toor dal"
+              className="w-full border border-rule bg-paper px-2 py-1.5 text-sm"
+            />
+          </Field>
+        ) : (
+          <Field label="Product">
+            <select
+              value={productId}
+              onChange={(e) => setProductId(e.target.value)}
+              className="w-full border border-rule bg-paper px-2 py-1.5 text-sm font-mono"
+            >
+              {products.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} — ₹{(p.unit_price_paise / 100).toFixed(0)}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
         <Field label="Envelope ceiling (₹)">
           <input
             type="number"
@@ -328,43 +447,56 @@ export default function LivePage() {
         </Field>
         <button
           type="button"
-          onClick={runSession}
-          disabled={running || !merchantId || !productId}
+          onClick={mode === "agent" ? runAgentDecides : runSession}
+          disabled={running || !merchantId || (mode === "scripted" && !productId)}
           className="border border-ink bg-ink text-paper px-4 py-2 font-mono text-sm uppercase tracking-wide hover:bg-ink/85 disabled:opacity-40 transition-colors"
         >
-          {running ? "Running…" : "Run agent session"}
+          {running
+            ? "Running…"
+            : mode === "agent"
+              ? "Let the agent decide"
+              : "Run agent session"}
         </button>
+        {mode === "agent" && agentError && (
+          <p className="sm:col-span-2 lg:col-span-5 text-xs text-band-red font-mono">
+            {agentError}
+          </p>
+        )}
       </div>
 
       <div className="grid lg:grid-cols-3 gap-8">
         <section aria-labelledby="calls-heading">
           <h2 id="calls-heading" className="font-mono text-xs uppercase tracking-wider text-ink-muted mb-3">
-            Tool calls
+            {mode === "agent" ? "Agent reasoning" : "Tool calls"}
           </h2>
-          <ol className="border border-rule divide-y divide-rule">
-            {calls.length === 0 && (
-              <li className="px-3 py-6 text-center text-sm text-ink-muted">
-                Nothing run yet.
-              </li>
-            )}
-            {calls.map((c, i) => (
-              <li key={i} className="px-3 py-2 text-sm flex items-center justify-between gap-2">
-                <span className="font-mono truncate">{c.label}</span>
-                <span
-                  className={`font-mono text-[10px] uppercase shrink-0 ${
-                    c.status === "ok"
-                      ? "text-band-green"
-                      : c.status === "error"
-                        ? "text-band-red"
-                        : "text-ink-muted"
-                  }`}
-                  title={c.detail}
-                >
-                  {c.status}
-                </span>
-              </li>
-            ))}
-          </ol>
+          {mode === "agent" ? (
+            <AgentTrace events={agentEvents} connected={agentConnected} />
+          ) : (
+            <ol className="border border-rule divide-y divide-rule">
+              {calls.length === 0 && (
+                <li className="px-3 py-6 text-center text-sm text-ink-muted">
+                  Nothing run yet.
+                </li>
+              )}
+              {calls.map((c, i) => (
+                <li key={i} className="px-3 py-2 text-sm flex items-center justify-between gap-2">
+                  <span className="font-mono truncate">{c.label}</span>
+                  <span
+                    className={`font-mono text-[10px] uppercase shrink-0 ${
+                      c.status === "ok"
+                        ? "text-band-green"
+                        : c.status === "error"
+                          ? "text-band-red"
+                          : "text-ink-muted"
+                    }`}
+                    title={c.detail}
+                  >
+                    {c.status}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          )}
 
           {checkout && (
             <div className="mt-4 border border-rule p-3">

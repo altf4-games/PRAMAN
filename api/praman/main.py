@@ -8,6 +8,7 @@ from contextlib import AsyncExitStack, asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from praman.api.routes_agent_runner import router as agent_runner_router
 from praman.api.routes_agents import router as agents_router
 from praman.api.routes_approvals import router as approvals_router
 from praman.api.routes_cart import router as cart_router
@@ -62,6 +63,7 @@ app.add_middleware(
 app.include_router(events_router, prefix="/api")
 app.include_router(catalog_router)
 app.include_router(agents_router)
+app.include_router(agent_runner_router)
 app.include_router(merchants_router)
 app.include_router(envelope_router)
 app.include_router(quotes_router)
