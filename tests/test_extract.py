@@ -4,7 +4,12 @@ import json
 
 import pytest
 from praman.adapters.llm import FakeLLMClient
-from praman.ingest.extract import IngestExtractionError, extract_from_image, extract_from_text
+from praman.ingest.extract import (
+    IngestExtractionError,
+    _extract_json_array_substring,
+    extract_from_image,
+    extract_from_text,
+)
 
 _VALID_ITEM = {
     "name": "Toor Dal",
@@ -93,3 +98,66 @@ async def test_fake_llm_client_raises_when_queue_empty() -> None:
     llm = FakeLLMClient()
     with pytest.raises(RuntimeError):
         await llm.generate_json("prompt")
+
+
+# --- Lenient parsing: real Gemini responses have been observed to wrap
+# valid JSON in a markdown fence, add leading prose, or leave a trailing
+# comma despite response_mime_type="application/json". These should be
+# repaired for free rather than failing the whole file. ---
+
+
+async def test_extract_recovers_from_markdown_code_fence() -> None:
+    llm = FakeLLMClient()
+    llm.enqueue(f"```json\n{json.dumps([_VALID_ITEM])}\n```")
+
+    products = await extract_from_text(llm, "some text")
+
+    assert len(products) == 1
+    assert products[0].name == "Toor Dal"
+
+
+async def test_extract_recovers_from_leading_prose_before_array() -> None:
+    llm = FakeLLMClient()
+    llm.enqueue(f"Here is the extracted catalog:\n{json.dumps([_VALID_ITEM])}")
+
+    products = await extract_from_text(llm, "some text")
+
+    assert len(products) == 1
+
+
+async def test_extract_recovers_from_trailing_comma() -> None:
+    llm = FakeLLMClient()
+    # json.dumps never produces a trailing comma — build it by hand.
+    raw = "[" + json.dumps(_VALID_ITEM) + ",]"
+    llm.enqueue(raw)
+
+    products = await extract_from_text(llm, "some text")
+
+    assert len(products) == 1
+
+
+def test_extract_json_array_substring_ignores_brackets_inside_strings() -> None:
+    text = '[{"name": "Rice [Basmati]", "note": "a]b"}]'
+    assert _extract_json_array_substring(text) == text
+
+
+def test_extract_json_array_substring_ignores_escaped_quotes() -> None:
+    text = r'[{"name": "5\" ring"}]'
+    assert _extract_json_array_substring(text) == text
+
+
+def test_extract_json_array_substring_stops_at_matching_close_bracket() -> None:
+    text = '[{"a": 1}] some trailing prose the model added'
+    assert _extract_json_array_substring(text) == '[{"a": 1}]'
+
+
+def test_extract_json_array_substring_returns_none_when_no_array_present() -> None:
+    assert _extract_json_array_substring("no brackets here") is None
+
+
+async def test_extract_still_raises_on_genuinely_broken_json() -> None:
+    llm = FakeLLMClient()
+    llm.enqueue('[{"name": "Toor Dal", "unit_price_paise": }]')  # missing value, unrecoverable
+
+    with pytest.raises(IngestExtractionError):
+        await extract_from_text(llm, "some text")

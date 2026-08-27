@@ -10,6 +10,7 @@ never exposed to agents until it clears the confidence gate.
 from __future__ import annotations
 
 import json
+import re
 from typing import Literal
 
 from pydantic import BaseModel, Field, ValidationError
@@ -41,9 +42,65 @@ class IngestExtractionError(Exception):
     whole ingest run — one bad source shouldn't take down the batch."""
 
 
+_CODE_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
+_TRAILING_COMMA_RE = re.compile(r",(\s*[\]}])")
+
+
+def _extract_json_array_substring(text: str) -> str | None:
+    """Finds the first top-level `[...]` in `text` by bracket-balanced
+    scanning (string-aware, so brackets inside a JSON string value don't
+    throw off the count). Returns None if no balanced array is found."""
+    start = text.find("[")
+    if start == -1:
+        return None
+
+    depth = 0
+    in_string = False
+    escape_next = False
+    for i in range(start, len(text)):
+        char = text[i]
+        if escape_next:
+            escape_next = False
+            continue
+        if char == "\\":
+            escape_next = True
+            continue
+        if char == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if char == "[":
+            depth += 1
+        elif char == "]":
+            depth -= 1
+            if depth == 0:
+                return text[start : i + 1]
+    return None
+
+
+def _lenient_json_loads(raw_text: str) -> object:
+    """Gemini's `response_mime_type="application/json"` usually produces
+    clean JSON, but not always — a stray markdown fence, leading prose, or
+    a trailing comma has been observed in practice. Try strict parsing
+    first; only fall back to these repairs (all free, no extra API call)
+    on failure, and only ever use the repaired result if it *also* parses
+    cleanly — this never guesses at content, only strips known-safe noise.
+    """
+    try:
+        return json.loads(raw_text)
+    except json.JSONDecodeError:
+        pass
+
+    cleaned = _CODE_FENCE_RE.sub("", raw_text.strip())
+    array_text = _extract_json_array_substring(cleaned) or cleaned
+    array_text = _TRAILING_COMMA_RE.sub(r"\1", array_text)
+    return json.loads(array_text)  # let this raise if repairs weren't enough
+
+
 def _parse_model_response(raw_text: str) -> list[ExtractedProduct]:
     try:
-        payload = json.loads(raw_text)
+        payload = _lenient_json_loads(raw_text)
     except json.JSONDecodeError as exc:
         raise IngestExtractionError(f"model response was not valid JSON: {exc}") from exc
 
