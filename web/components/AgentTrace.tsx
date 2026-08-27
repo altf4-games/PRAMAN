@@ -75,6 +75,13 @@ function renderRow(e: LedgerBusEvent) {
         </p>
       );
     }
+    case "AGENT_ERROR":
+      return (
+        <p className="text-band-red">
+          <span className="font-mono uppercase text-[10px]">error</span>{" "}
+          {String(p.error)}
+        </p>
+      );
     case "AGENT_DONE":
       return (
         <p className="font-medium">

@@ -8,13 +8,18 @@ connects after a given event was published.
 
 from __future__ import annotations
 
+import logging
 import uuid
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from praman.agent_runner.runner import run_agent
 from praman.config import get_settings
+from praman.events import BusEvent, bus
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["agent"])
 
@@ -54,19 +59,45 @@ async def agent_run(body: AgentRunIn) -> AgentRunOut:
             ),
         )
     run_id = body.run_id or uuid.uuid4().hex
-    result = await run_agent(
-        settings,
-        run_id=run_id,
-        goal=body.goal,
-        merchant_id=body.merchant_id,
-        merchant_name=body.merchant_name,
-        user_ref=body.user_ref,
-        user_whatsapp=body.user_whatsapp,
-        ceiling_paise=body.ceiling_paise,
-        max_single_txn_paise=body.max_single_txn_paise,
-        allowed_categories=body.allowed_categories,
-        min_reversibility=body.min_reversibility,
-    )
+    try:
+        result = await run_agent(
+            settings,
+            run_id=run_id,
+            goal=body.goal,
+            merchant_id=body.merchant_id,
+            merchant_name=body.merchant_name,
+            user_ref=body.user_ref,
+            user_whatsapp=body.user_whatsapp,
+            ceiling_paise=body.ceiling_paise,
+            max_single_txn_paise=body.max_single_txn_paise,
+            allowed_categories=body.allowed_categories,
+            min_reversibility=body.min_reversibility,
+        )
+    except Exception as exc:
+        # An unhandled exception here would otherwise propagate past
+        # FastAPI's own exception handling and CORSMiddleware entirely
+        # (both sit *inside* Starlette's outermost ServerErrorMiddleware),
+        # so the browser sees a response with no CORS headers at all and
+        # reports it as a CORS failure -- masking what's usually a real
+        # upstream error (confirmed live: a Gemini 429 quota error showed
+        # up in the browser purely as "blocked by CORS policy"). Catching
+        # it here keeps the error inside FastAPI's own handling, so
+        # CORSMiddleware still gets to add its headers, and also lets a
+        # live viewer see *why* the run stopped rather than a silent hang.
+        logger.warning("agent_run: run %s failed", run_id, exc_info=True)
+        await bus.publish(
+            BusEvent(
+                session_id=f"agent:{run_id}",
+                event_type="AGENT_ERROR",
+                payload={
+                    "event_id": uuid.uuid4().hex,
+                    "ts": datetime.now(UTC).isoformat(),
+                    "error": str(exc)[:500],
+                },
+            )
+        )
+        raise HTTPException(status_code=502, detail=f"agent run failed: {exc}"[:500]) from exc
+
     return AgentRunOut(
         run_id=result.run_id,
         agent_did=result.agent_did,
