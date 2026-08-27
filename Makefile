@@ -1,4 +1,4 @@
-.PHONY: install migrate run test lint typecheck ingest ingest-catalogs
+.PHONY: install migrate run test lint typecheck ingest ingest-catalogs labels
 
 install:
 	pip install -e ".[dev]"
@@ -30,3 +30,10 @@ ingest:
 ingest-catalogs:
 	python -m praman.ingest.pipeline catalog api/praman/seed/masters/grocery_master.csv --out api/praman/seed/catalog_grocery.json
 	python -m praman.ingest.pipeline catalog api/praman/seed/masters/jewellery_master.csv --out api/praman/seed/catalog_jewellery.json
+
+# Regenerates harness/labels.json (the 60 hand-labeled carts). Not run
+# automatically — the committed labels.json is the frozen ground truth the
+# Phase 9 harness measures against; re-running this after seeing accuracy
+# numbers would defeat the point (CLAUDE.md §5).
+labels:
+	python scripts/gen_labels.py

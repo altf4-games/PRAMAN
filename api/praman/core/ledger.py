@@ -24,16 +24,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from praman.crypto.canonical import canonical_hash, sha256_hex
 from praman.events import BusEvent, bus
 from praman.models import LedgerEvent
+from praman.timeutil import as_aware_utc as _as_aware_utc
 
 GENESIS_HASH = "0" * 64
-
-
-def _as_aware_utc(ts: datetime) -> datetime:
-    """sqlite's DateTime(timezone=True) round-trips as a naive datetime
-    (unlike Postgres, which preserves tzinfo) — normalize so comparisons
-    never mix naive and aware values. Values we write are always UTC.
-    """
-    return ts if ts.tzinfo is not None else ts.replace(tzinfo=UTC)
 
 
 # Per-session locks serialize append_event so chain order is deterministic

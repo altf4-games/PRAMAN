@@ -48,6 +48,24 @@ MERCHANT_APPROVAL_TIMEOUT_S = 15 * 60
 
 AGENT_CLOCK_SKEW_TOLERANCE_S = 60
 
+# --- Gate: velocity (R10) ---
+# "No more than N ALLOWed transactions per agent within a rolling window" —
+# guards against envelope drain by salami-slicing (CLAUDE.md §8 threat
+# model). Not specified numerically by the spec; chosen as a reasonable
+# default and named here rather than inlined, per the non-negotiable rule.
+VELOCITY_WINDOW_S = 60
+VELOCITY_MAX_TRANSACTIONS = 5
+VELOCITY_WINDOW_DEMO_MODE_S = 30
+VELOCITY_MAX_TRANSACTIONS_DEMO_MODE = 3
+
+# --- Gate: idempotency (R12) ---
+IDEMPOTENCY_KEY_TTL_S = 24 * 60 * 60
+
+# --- Gate: daily cap tracking (R11) ---
+# Slightly over 24h so a request right at day-boundary doesn't lose its
+# counter mid-check.
+DAILY_CAP_TTL_S = 25 * 60 * 60
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")

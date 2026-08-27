@@ -47,6 +47,18 @@ repo.)
   function alone, including a Hypothesis property test that no `ALLOW`ed
   cart can ever push spend above the ceiling), all passing without a real
   Redis server (`fakeredis`).
+- **Phase 5 (done):** the Reversibility Ladder (`reversibility_score_detailed`
+  — five weighted factors, hard-zero on any personalised item, MIN across
+  items, `f_value` cart-level) and the full **R01-R12 Policy Gate**
+  (`run_gate`): signature → registration → envelope existence → envelope
+  policy → quote freshness/price/stock → reversibility escalation →
+  amber cooling-off → velocity → trust tier/daily cap → idempotency, first
+  non-`ALLOW` wins, every outcome (`ALLOW` included) persists and ledgers,
+  fail-closed on any unhandled exception. 41 new tests (21 for the
+  reversibility function, 20 for the gate — one per rule firing in
+  isolation, two ordering tests, two fail-closed tests). `harness/labels.json`
+  — 60 hand-reasoned carts committed now, untouched until Phase 9 measures
+  the formula against them — see the honesty note in ARCHITECTURE.md.
 
 ## What's real vs mocked (so far)
 
@@ -121,6 +133,12 @@ repo.)
   reply instruction instead. See `whatsapp/client.py`,
   `whatsapp/onboarding.py`, and `ARCHITECTURE.md`'s Phase 3 section for the
   rest of the tradeoffs.
+- **`harness/labels.json`'s 60 "hand" labels:** AI-reasoned by this
+  assistant, not reviewed by a human. `scripts/gen_labels.py` never calls
+  `reversibility_score_detailed`, so the labels aren't secretly derived
+  from the formula they're meant to validate — but treat the eventual
+  Phase 9 accuracy number accordingly: it's validated against an
+  AI-labeled set, a materially weaker claim than a human-reviewed one.
 
 ## Quickstart (local dev)
 

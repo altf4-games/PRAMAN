@@ -1,0 +1,870 @@
+{
+  "methodology": "60 hand-reasoned carts (AI-assisted, not human-reviewed \u2014 see the docstring in scripts/gen_labels.py and README 'What's real vs mocked' for the honesty caveat this implies). Labels were assigned from independent domain reasoning about each cart \u2014 is the item custom/personalised, how large a fraction of a plausible budget is it, how easily could it be resold or returned \u2014 WITHOUT calling reversibility_score_detailed or referencing its weights/thresholds, so the Phase 9 harness's accuracy-against-labels comparison is not circular.",
+  "band_counts": {
+    "green": 25,
+    "amber": 24,
+    "red": 15
+  },
+  "carts": [
+    {
+      "id": "grocery-single-01",
+      "catalog": "grocery",
+      "items": [
+        {
+          "sku": "toor-dal-1kg",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 200000,
+      "label_band": "green",
+      "rationale": "Single-item everyday basket: Toor Dal (1kg) at \u20b9180.00, a consumable good \u2014 cheap relative to a weekly grocery budget, no special handling, trivially reversible in practice even with a short formal return window."
+    },
+    {
+      "id": "grocery-single-02",
+      "catalog": "grocery",
+      "items": [
+        {
+          "sku": "moong-dal-1kg",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 200000,
+      "label_band": "green",
+      "rationale": "Single-item everyday basket: Moong Dal (1kg) at \u20b9175.00, a consumable good \u2014 cheap relative to a weekly grocery budget, no special handling, trivially reversible in practice even with a short formal return window."
+    },
+    {
+      "id": "grocery-single-03",
+      "catalog": "grocery",
+      "items": [
+        {
+          "sku": "chana-dal-1kg",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 200000,
+      "label_band": "green",
+      "rationale": "Single-item everyday basket: Chana Dal (1kg) at \u20b9110.00, a consumable good \u2014 cheap relative to a weekly grocery budget, no special handling, trivially reversible in practice even with a short formal return window."
+    },
+    {
+      "id": "grocery-single-04",
+      "catalog": "grocery",
+      "items": [
+        {
+          "sku": "masoor-dal-1kg",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 200000,
+      "label_band": "green",
+      "rationale": "Single-item everyday basket: Masoor Dal (1kg) at \u20b9120.00, a consumable good \u2014 cheap relative to a weekly grocery budget, no special handling, trivially reversible in practice even with a short formal return window."
+    },
+    {
+      "id": "grocery-single-05",
+      "catalog": "grocery",
+      "items": [
+        {
+          "sku": "urad-dal-1kg",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 200000,
+      "label_band": "green",
+      "rationale": "Single-item everyday basket: Urad Dal (1kg) at \u20b9160.00, a consumable good \u2014 cheap relative to a weekly grocery budget, no special handling, trivially reversible in practice even with a short formal return window."
+    },
+    {
+      "id": "grocery-single-06",
+      "catalog": "grocery",
+      "items": [
+        {
+          "sku": "rajma-500g",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 200000,
+      "label_band": "green",
+      "rationale": "Single-item everyday basket: Rajma (500g) at \u20b995.00, a consumable good \u2014 cheap relative to a weekly grocery budget, no special handling, trivially reversible in practice even with a short formal return window."
+    },
+    {
+      "id": "grocery-single-07",
+      "catalog": "grocery",
+      "items": [
+        {
+          "sku": "basmati-rice-5kg",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 200000,
+      "label_band": "green",
+      "rationale": "Single-item everyday basket: Basmati Rice (5kg) at \u20b9650.00, a consumable good \u2014 cheap relative to a weekly grocery budget, no special handling, trivially reversible in practice even with a short formal return window."
+    },
+    {
+      "id": "grocery-single-08",
+      "catalog": "grocery",
+      "items": [
+        {
+          "sku": "sona-masoori-rice-5kg",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 200000,
+      "label_band": "green",
+      "rationale": "Single-item everyday basket: Sona Masoori Rice (5kg) at \u20b9420.00, a consumable good \u2014 cheap relative to a weekly grocery budget, no special handling, trivially reversible in practice even with a short formal return window."
+    },
+    {
+      "id": "grocery-single-09",
+      "catalog": "grocery",
+      "items": [
+        {
+          "sku": "wheat-flour-5kg",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 200000,
+      "label_band": "green",
+      "rationale": "Single-item everyday basket: Wheat Flour (5kg) at \u20b9240.00, a consumable good \u2014 cheap relative to a weekly grocery budget, no special handling, trivially reversible in practice even with a short formal return window."
+    },
+    {
+      "id": "grocery-single-10",
+      "catalog": "grocery",
+      "items": [
+        {
+          "sku": "poha-500g",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 200000,
+      "label_band": "green",
+      "rationale": "Single-item everyday basket: Poha (500g) at \u20b945.00, a consumable good \u2014 cheap relative to a weekly grocery budget, no special handling, trivially reversible in practice even with a short formal return window."
+    },
+    {
+      "id": "grocery-single-11",
+      "catalog": "grocery",
+      "items": [
+        {
+          "sku": "suji-1kg",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 200000,
+      "label_band": "green",
+      "rationale": "Single-item everyday basket: Suji (1kg) at \u20b955.00, a consumable good \u2014 cheap relative to a weekly grocery budget, no special handling, trivially reversible in practice even with a short formal return window."
+    },
+    {
+      "id": "grocery-single-12",
+      "catalog": "grocery",
+      "items": [
+        {
+          "sku": "sugar-1kg",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 200000,
+      "label_band": "green",
+      "rationale": "Single-item everyday basket: Sugar (1kg) at \u20b948.00, a consumable good \u2014 cheap relative to a weekly grocery budget, no special handling, trivially reversible in practice even with a short formal return window."
+    },
+    {
+      "id": "grocery-single-13",
+      "catalog": "grocery",
+      "items": [
+        {
+          "sku": "salt-1kg",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 200000,
+      "label_band": "green",
+      "rationale": "Single-item everyday basket: Salt (1kg) at \u20b922.00, a consumable good \u2014 cheap relative to a weekly grocery budget, no special handling, trivially reversible in practice even with a short formal return window."
+    },
+    {
+      "id": "grocery-single-14",
+      "catalog": "grocery",
+      "items": [
+        {
+          "sku": "jaggery-1kg",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 200000,
+      "label_band": "green",
+      "rationale": "Single-item everyday basket: Jaggery (1kg) at \u20b968.00, a consumable good \u2014 cheap relative to a weekly grocery budget, no special handling, trivially reversible in practice even with a short formal return window."
+    },
+    {
+      "id": "grocery-single-15",
+      "catalog": "grocery",
+      "items": [
+        {
+          "sku": "turmeric-powder-200g",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 200000,
+      "label_band": "green",
+      "rationale": "Single-item everyday basket: Turmeric Powder (200g) at \u20b945.00, a consumable good \u2014 cheap relative to a weekly grocery budget, no special handling, trivially reversible in practice even with a short formal return window."
+    },
+    {
+      "id": "grocery-single-16",
+      "catalog": "grocery",
+      "items": [
+        {
+          "sku": "red-chilli-powder-200g",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 200000,
+      "label_band": "green",
+      "rationale": "Single-item everyday basket: Red Chilli Powder (200g) at \u20b970.00, a consumable good \u2014 cheap relative to a weekly grocery budget, no special handling, trivially reversible in practice even with a short formal return window."
+    },
+    {
+      "id": "grocery-single-17",
+      "catalog": "grocery",
+      "items": [
+        {
+          "sku": "coriander-powder-200g",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 200000,
+      "label_band": "green",
+      "rationale": "Single-item everyday basket: Coriander Powder (200g) at \u20b955.00, a consumable good \u2014 cheap relative to a weekly grocery budget, no special handling, trivially reversible in practice even with a short formal return window."
+    },
+    {
+      "id": "grocery-single-18",
+      "catalog": "grocery",
+      "items": [
+        {
+          "sku": "garam-masala-100g",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 200000,
+      "label_band": "green",
+      "rationale": "Single-item everyday basket: Garam Masala (100g) at \u20b985.00, a consumable good \u2014 cheap relative to a weekly grocery budget, no special handling, trivially reversible in practice even with a short formal return window."
+    },
+    {
+      "id": "grocery-single-19",
+      "catalog": "grocery",
+      "items": [
+        {
+          "sku": "sunflower-oil-1l",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 200000,
+      "label_band": "green",
+      "rationale": "Single-item everyday basket: Sunflower Oil 1L at \u20b9165.00, a consumable good \u2014 cheap relative to a weekly grocery budget, no special handling, trivially reversible in practice even with a short formal return window."
+    },
+    {
+      "id": "grocery-single-20",
+      "catalog": "grocery",
+      "items": [
+        {
+          "sku": "ghee-500g",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 200000,
+      "label_band": "green",
+      "rationale": "Single-item everyday basket: Ghee (500g) at \u20b9320.00, a consumable good \u2014 cheap relative to a weekly grocery budget, no special handling, trivially reversible in practice even with a short formal return window."
+    },
+    {
+      "id": "grocery-basket-01",
+      "catalog": "grocery",
+      "items": [
+        {
+          "sku": "fresh-tomatoes-1kg",
+          "qty": 1
+        },
+        {
+          "sku": "onions-1kg",
+          "qty": 1
+        },
+        {
+          "sku": "potatoes-1kg",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 200000,
+      "label_band": "green",
+      "rationale": "Everyday multi-item basket (Fresh Tomatoes (1kg), Onions (1kg), Potatoes (1kg)) \u2014 all perishable/consumable staples, total well under a weekly grocery budget, nothing here is hard to undo if something's wrong."
+    },
+    {
+      "id": "grocery-basket-02",
+      "catalog": "grocery",
+      "items": [
+        {
+          "sku": "milk-1l",
+          "qty": 2
+        },
+        {
+          "sku": "curd-400g",
+          "qty": 1
+        },
+        {
+          "sku": "butter-100g",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 200000,
+      "label_band": "green",
+      "rationale": "Everyday multi-item basket (Milk 1L, Curd (400g), Butter (100g)) \u2014 all perishable/consumable staples, total well under a weekly grocery budget, nothing here is hard to undo if something's wrong."
+    },
+    {
+      "id": "grocery-basket-03",
+      "catalog": "grocery",
+      "items": [
+        {
+          "sku": "toor-dal-1kg",
+          "qty": 1
+        },
+        {
+          "sku": "cumin-seeds-250g",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 200000,
+      "label_band": "green",
+      "rationale": "Everyday multi-item basket (Toor Dal (1kg), Cumin Seeds (250g)) \u2014 all perishable/consumable staples, total well under a weekly grocery budget, nothing here is hard to undo if something's wrong."
+    },
+    {
+      "id": "grocery-basket-04",
+      "catalog": "grocery",
+      "items": [
+        {
+          "sku": "tea-powder-250g",
+          "qty": 1
+        },
+        {
+          "sku": "instant-coffee-100g",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 200000,
+      "label_band": "green",
+      "rationale": "Everyday multi-item basket (Tea Powder (250g), Instant Coffee (100g)) \u2014 all perishable/consumable staples, total well under a weekly grocery budget, nothing here is hard to undo if something's wrong."
+    },
+    {
+      "id": "grocery-basket-05",
+      "catalog": "grocery",
+      "items": [
+        {
+          "sku": "biscuits-pack-200g",
+          "qty": 2
+        },
+        {
+          "sku": "dry-fruits-mixed-pack-500g",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 200000,
+      "label_band": "green",
+      "rationale": "Everyday multi-item basket (Biscuits Pack (200g), Dry Fruits Mixed Pack (500g)) \u2014 all perishable/consumable staples, total well under a weekly grocery budget, nothing here is hard to undo if something's wrong."
+    },
+    {
+      "id": "jewellery-amber-01",
+      "catalog": "jewellery",
+      "items": [
+        {
+          "sku": "silver-chain",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 1920000,
+      "label_band": "amber",
+      "rationale": "Silver Chain (\u20b96,400.00) is a stock-held chains item \u2014 off-the-shelf, not engraved or custom-fit, so it can genuinely be returned or resold, but it's real money and worth a short pause before it ships rather than instant autonomy."
+    },
+    {
+      "id": "jewellery-amber-02",
+      "catalog": "jewellery",
+      "items": [
+        {
+          "sku": "gold-chain",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 7800000,
+      "label_band": "amber",
+      "rationale": "Gold Chain (\u20b952,000.00) is a stock-held chains item \u2014 off-the-shelf, not engraved or custom-fit, so it can genuinely be returned or resold, but it's real money and worth a short pause before it ships rather than instant autonomy."
+    },
+    {
+      "id": "jewellery-amber-03",
+      "catalog": "jewellery",
+      "items": [
+        {
+          "sku": "silver-anklet-pair",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 1140000,
+      "label_band": "amber",
+      "rationale": "Silver Anklet Pair (\u20b93,800.00) is a stock-held anklets item \u2014 off-the-shelf, not engraved or custom-fit, so it can genuinely be returned or resold, but it's real money and worth a short pause before it ships rather than instant autonomy."
+    },
+    {
+      "id": "jewellery-amber-04",
+      "catalog": "jewellery",
+      "items": [
+        {
+          "sku": "silver-bracelet",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 840000,
+      "label_band": "amber",
+      "rationale": "Silver Bracelet (\u20b95,600.00) is a stock-held bracelets item \u2014 off-the-shelf, not engraved or custom-fit, so it can genuinely be returned or resold, but it's real money and worth a short pause before it ships rather than instant autonomy."
+    },
+    {
+      "id": "jewellery-amber-05",
+      "catalog": "jewellery",
+      "items": [
+        {
+          "sku": "gold-bracelet",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 11400000,
+      "label_band": "amber",
+      "rationale": "Gold Bracelet (\u20b938,000.00) is a stock-held bracelets item \u2014 off-the-shelf, not engraved or custom-fit, so it can genuinely be returned or resold, but it's real money and worth a short pause before it ships rather than instant autonomy."
+    },
+    {
+      "id": "jewellery-amber-06",
+      "catalog": "jewellery",
+      "items": [
+        {
+          "sku": "silver-ring-plain-band",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 435000,
+      "label_band": "amber",
+      "rationale": "Silver Ring - Plain Band (\u20b92,900.00) is a stock-held rings item \u2014 off-the-shelf, not engraved or custom-fit, so it can genuinely be returned or resold, but it's real money and worth a short pause before it ships rather than instant autonomy."
+    },
+    {
+      "id": "jewellery-amber-07",
+      "catalog": "jewellery",
+      "items": [
+        {
+          "sku": "gold-ring-plain-band",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 9600000,
+      "label_band": "amber",
+      "rationale": "Gold Ring - Plain Band (\u20b932,000.00) is a stock-held rings item \u2014 off-the-shelf, not engraved or custom-fit, so it can genuinely be returned or resold, but it's real money and worth a short pause before it ships rather than instant autonomy."
+    },
+    {
+      "id": "jewellery-amber-08",
+      "catalog": "jewellery",
+      "items": [
+        {
+          "sku": "silver-earrings-studs",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 315000,
+      "label_band": "amber",
+      "rationale": "Silver Earrings - Studs (\u20b92,100.00) is a stock-held earrings item \u2014 off-the-shelf, not engraved or custom-fit, so it can genuinely be returned or resold, but it's real money and worth a short pause before it ships rather than instant autonomy."
+    },
+    {
+      "id": "jewellery-amber-09",
+      "catalog": "jewellery",
+      "items": [
+        {
+          "sku": "gold-earrings-studs",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 6450000,
+      "label_band": "amber",
+      "rationale": "Gold Earrings - Studs (\u20b921,500.00) is a stock-held earrings item \u2014 off-the-shelf, not engraved or custom-fit, so it can genuinely be returned or resold, but it's real money and worth a short pause before it ships rather than instant autonomy."
+    },
+    {
+      "id": "jewellery-amber-10",
+      "catalog": "jewellery",
+      "items": [
+        {
+          "sku": "gold-earrings-jhumka",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 6600000,
+      "label_band": "amber",
+      "rationale": "Gold Earrings - Jhumka (\u20b944,000.00) is a stock-held earrings item \u2014 off-the-shelf, not engraved or custom-fit, so it can genuinely be returned or resold, but it's real money and worth a short pause before it ships rather than instant autonomy."
+    },
+    {
+      "id": "jewellery-amber-11",
+      "catalog": "jewellery",
+      "items": [
+        {
+          "sku": "silver-necklace",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 4560000,
+      "label_band": "amber",
+      "rationale": "Silver Necklace (\u20b915,200.00) is a stock-held necklaces item \u2014 off-the-shelf, not engraved or custom-fit, so it can genuinely be returned or resold, but it's real money and worth a short pause before it ships rather than instant autonomy."
+    },
+    {
+      "id": "jewellery-amber-12",
+      "catalog": "jewellery",
+      "items": [
+        {
+          "sku": "gold-necklace",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 14250000,
+      "label_band": "amber",
+      "rationale": "Gold Necklace (\u20b995,000.00) is a stock-held necklaces item \u2014 off-the-shelf, not engraved or custom-fit, so it can genuinely be returned or resold, but it's real money and worth a short pause before it ships rather than instant autonomy."
+    },
+    {
+      "id": "jewellery-amber-13",
+      "catalog": "jewellery",
+      "items": [
+        {
+          "sku": "silver-pendant",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 930000,
+      "label_band": "amber",
+      "rationale": "Silver Pendant (\u20b93,100.00) is a stock-held pendants item \u2014 off-the-shelf, not engraved or custom-fit, so it can genuinely be returned or resold, but it's real money and worth a short pause before it ships rather than instant autonomy."
+    },
+    {
+      "id": "jewellery-amber-14",
+      "catalog": "jewellery",
+      "items": [
+        {
+          "sku": "gold-pendant",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 3900000,
+      "label_band": "amber",
+      "rationale": "Gold Pendant (\u20b926,000.00) is a stock-held pendants item \u2014 off-the-shelf, not engraved or custom-fit, so it can genuinely be returned or resold, but it's real money and worth a short pause before it ships rather than instant autonomy."
+    },
+    {
+      "id": "jewellery-amber-15",
+      "catalog": "jewellery",
+      "items": [
+        {
+          "sku": "gold-bangle-set-2-pcs",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 20400000,
+      "label_band": "amber",
+      "rationale": "Gold Bangle Set (2 pcs) (\u20b968,000.00) is a stock-held bangles item \u2014 off-the-shelf, not engraved or custom-fit, so it can genuinely be returned or resold, but it's real money and worth a short pause before it ships rather than instant autonomy."
+    },
+    {
+      "id": "jewellery-amber-16",
+      "catalog": "jewellery",
+      "items": [
+        {
+          "sku": "silver-bangle-set-2-pcs",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 1680000,
+      "label_band": "amber",
+      "rationale": "Silver Bangle Set (2 pcs) (\u20b911,200.00) is a stock-held bangles item \u2014 off-the-shelf, not engraved or custom-fit, so it can genuinely be returned or resold, but it's real money and worth a short pause before it ships rather than instant autonomy."
+    },
+    {
+      "id": "jewellery-amber-17",
+      "catalog": "jewellery",
+      "items": [
+        {
+          "sku": "silver-nose-pin",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 255000,
+      "label_band": "amber",
+      "rationale": "Silver Nose Pin (\u20b9850.00) is a stock-held nose pins item \u2014 off-the-shelf, not engraved or custom-fit, so it can genuinely be returned or resold, but it's real money and worth a short pause before it ships rather than instant autonomy."
+    },
+    {
+      "id": "jewellery-amber-18",
+      "catalog": "jewellery",
+      "items": [
+        {
+          "sku": "gold-nose-pin",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 930000,
+      "label_band": "amber",
+      "rationale": "Gold Nose Pin (\u20b96,200.00) is a stock-held nose pins item \u2014 off-the-shelf, not engraved or custom-fit, so it can genuinely be returned or resold, but it's real money and worth a short pause before it ships rather than instant autonomy."
+    },
+    {
+      "id": "jewellery-amber-19",
+      "catalog": "jewellery",
+      "items": [
+        {
+          "sku": "silver-toe-rings-pair",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 570000,
+      "label_band": "amber",
+      "rationale": "Silver Toe Rings (pair) (\u20b91,900.00) is a stock-held rings item \u2014 off-the-shelf, not engraved or custom-fit, so it can genuinely be returned or resold, but it's real money and worth a short pause before it ships rather than instant autonomy."
+    },
+    {
+      "id": "jewellery-amber-20",
+      "catalog": "jewellery",
+      "items": [
+        {
+          "sku": "gold-mangalsutra",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 8700000,
+      "label_band": "amber",
+      "rationale": "Gold Mangalsutra (\u20b958,000.00) is a stock-held necklaces item \u2014 off-the-shelf, not engraved or custom-fit, so it can genuinely be returned or resold, but it's real money and worth a short pause before it ships rather than instant autonomy."
+    },
+    {
+      "id": "jewellery-amber-21",
+      "catalog": "jewellery",
+      "items": [
+        {
+          "sku": "silver-kada",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 2940000,
+      "label_band": "amber",
+      "rationale": "Silver Kada (\u20b99,800.00) is a stock-held bangles item \u2014 off-the-shelf, not engraved or custom-fit, so it can genuinely be returned or resold, but it's real money and worth a short pause before it ships rather than instant autonomy."
+    },
+    {
+      "id": "jewellery-amber-22",
+      "catalog": "jewellery",
+      "items": [
+        {
+          "sku": "gold-kada",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 10800000,
+      "label_band": "amber",
+      "rationale": "Gold Kada (\u20b972,000.00) is a stock-held bangles item \u2014 off-the-shelf, not engraved or custom-fit, so it can genuinely be returned or resold, but it's real money and worth a short pause before it ships rather than instant autonomy."
+    },
+    {
+      "id": "jewellery-amber-23",
+      "catalog": "jewellery",
+      "items": [
+        {
+          "sku": "silver-locket",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 720000,
+      "label_band": "amber",
+      "rationale": "Silver Locket (\u20b92,400.00) is a stock-held pendants item \u2014 off-the-shelf, not engraved or custom-fit, so it can genuinely be returned or resold, but it's real money and worth a short pause before it ships rather than instant autonomy."
+    },
+    {
+      "id": "jewellery-amber-24",
+      "catalog": "jewellery",
+      "items": [
+        {
+          "sku": "gold-locket",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 3675000,
+      "label_band": "amber",
+      "rationale": "Gold Locket (\u20b924,500.00) is a stock-held pendants item \u2014 off-the-shelf, not engraved or custom-fit, so it can genuinely be returned or resold, but it's real money and worth a short pause before it ships rather than instant autonomy."
+    },
+    {
+      "id": "jewellery-red-01",
+      "catalog": "jewellery",
+      "items": [
+        {
+          "sku": "engraved-silver-ring-name-band",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 630000,
+      "label_band": "red",
+      "rationale": "Engraved Silver Ring - Name Band is made-to-order (engraving, custom fit, or bespoke commission) \u2014 it cannot be resold or meaningfully returned once made, regardless of price, so this needs a human in the loop before it's committed to."
+    },
+    {
+      "id": "jewellery-red-02",
+      "catalog": "jewellery",
+      "items": [
+        {
+          "sku": "engraved-gold-pendant-initials",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 2835000,
+      "label_band": "red",
+      "rationale": "Engraved Gold Pendant - Initials is made-to-order (engraving, custom fit, or bespoke commission) \u2014 it cannot be resold or meaningfully returned once made, regardless of price, so this needs a human in the loop before it's committed to."
+    },
+    {
+      "id": "jewellery-red-03",
+      "catalog": "jewellery",
+      "items": [
+        {
+          "sku": "engraved-silver-bracelet-message",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 1170000,
+      "label_band": "red",
+      "rationale": "Engraved Silver Bracelet - Message is made-to-order (engraving, custom fit, or bespoke commission) \u2014 it cannot be resold or meaningfully returned once made, regardless of price, so this needs a human in the loop before it's committed to."
+    },
+    {
+      "id": "jewellery-red-04",
+      "catalog": "jewellery",
+      "items": [
+        {
+          "sku": "custom-fit-gold-ring",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 5250000,
+      "label_band": "red",
+      "rationale": "Custom Fit Gold Ring is made-to-order (engraving, custom fit, or bespoke commission) \u2014 it cannot be resold or meaningfully returned once made, regardless of price, so this needs a human in the loop before it's committed to."
+    },
+    {
+      "id": "jewellery-red-05",
+      "catalog": "jewellery",
+      "items": [
+        {
+          "sku": "engraved-gold-locket-photo-etching",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 4425000,
+      "label_band": "red",
+      "rationale": "Engraved Gold Locket - Photo Etching is made-to-order (engraving, custom fit, or bespoke commission) \u2014 it cannot be resold or meaningfully returned once made, regardless of price, so this needs a human in the loop before it's committed to."
+    },
+    {
+      "id": "jewellery-red-06",
+      "catalog": "jewellery",
+      "items": [
+        {
+          "sku": "custom-design-necklace",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 12750000,
+      "label_band": "red",
+      "rationale": "Custom Design Necklace is made-to-order (engraving, custom fit, or bespoke commission) \u2014 it cannot be resold or meaningfully returned once made, regardless of price, so this needs a human in the loop before it's committed to."
+    },
+    {
+      "id": "jewellery-red-07",
+      "catalog": "jewellery",
+      "items": [
+        {
+          "sku": "engraved-silver-kada-name",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 1575000,
+      "label_band": "red",
+      "rationale": "Engraved Silver Kada - Name is made-to-order (engraving, custom fit, or bespoke commission) \u2014 it cannot be resold or meaningfully returned once made, regardless of price, so this needs a human in the loop before it's committed to."
+    },
+    {
+      "id": "jewellery-red-08",
+      "catalog": "jewellery",
+      "items": [
+        {
+          "sku": "custom-fit-silver-anklet",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 690000,
+      "label_band": "red",
+      "rationale": "Custom Fit Silver Anklet is made-to-order (engraving, custom fit, or bespoke commission) \u2014 it cannot be resold or meaningfully returned once made, regardless of price, so this needs a human in the loop before it's committed to."
+    },
+    {
+      "id": "jewellery-red-09",
+      "catalog": "jewellery",
+      "items": [
+        {
+          "sku": "engraved-couple-rings-pair",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 2370000,
+      "label_band": "red",
+      "rationale": "Engraved Couple Rings (pair) is made-to-order (engraving, custom fit, or bespoke commission) \u2014 it cannot be resold or meaningfully returned once made, regardless of price, so this needs a human in the loop before it's committed to."
+    },
+    {
+      "id": "jewellery-red-10",
+      "catalog": "jewellery",
+      "items": [
+        {
+          "sku": "custom-gemstone-ring",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 7200000,
+      "label_band": "red",
+      "rationale": "Custom Gemstone Ring is made-to-order (engraving, custom fit, or bespoke commission) \u2014 it cannot be resold or meaningfully returned once made, regardless of price, so this needs a human in the loop before it's committed to."
+    },
+    {
+      "id": "jewellery-red-11",
+      "catalog": "jewellery",
+      "items": [
+        {
+          "sku": "engraved-silver-chain-name-tag",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 1230000,
+      "label_band": "red",
+      "rationale": "Engraved Silver Chain - Name Tag is made-to-order (engraving, custom fit, or bespoke commission) \u2014 it cannot be resold or meaningfully returned once made, regardless of price, so this needs a human in the loop before it's committed to."
+    },
+    {
+      "id": "jewellery-red-12",
+      "catalog": "jewellery",
+      "items": [
+        {
+          "sku": "bespoke-bridal-necklace-set",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 12300000,
+      "label_band": "red",
+      "rationale": "Bespoke Bridal Necklace Set is made-to-order (engraving, custom fit, or bespoke commission) \u2014 it cannot be resold or meaningfully returned once made, regardless of price, so this needs a human in the loop before it's committed to."
+    },
+    {
+      "id": "jewellery-red-13",
+      "catalog": "jewellery",
+      "items": [
+        {
+          "sku": "engraved-gold-bracelet-date",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 6150000,
+      "label_band": "red",
+      "rationale": "Engraved Gold Bracelet - Date is made-to-order (engraving, custom fit, or bespoke commission) \u2014 it cannot be resold or meaningfully returned once made, regardless of price, so this needs a human in the loop before it's committed to."
+    },
+    {
+      "id": "jewellery-red-14",
+      "catalog": "jewellery",
+      "items": [
+        {
+          "sku": "custom-birthstone-pendant",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 3300000,
+      "label_band": "red",
+      "rationale": "Custom Birthstone Pendant is made-to-order (engraving, custom fit, or bespoke commission) \u2014 it cannot be resold or meaningfully returned once made, regardless of price, so this needs a human in the loop before it's committed to."
+    },
+    {
+      "id": "jewellery-red-15",
+      "catalog": "jewellery",
+      "items": [
+        {
+          "sku": "engraved-silver-earrings-initials",
+          "qty": 1
+        }
+      ],
+      "assumed_envelope_ceiling_paise": 810000,
+      "label_band": "red",
+      "rationale": "Engraved Silver Earrings - Initials is made-to-order (engraving, custom fit, or bespoke commission) \u2014 it cannot be resold or meaningfully returned once made, regardless of price, so this needs a human in the loop before it's committed to."
+    }
+  ]
+}

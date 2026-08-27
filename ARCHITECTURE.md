@@ -264,3 +264,60 @@ unknown agent is untrusted, not innocent-until-proven-revoked.
 `verify_agent_request` folds "unknown" and "revoked" into the same
 `AGENT_REVOKED` reason code (R02) since the caller's remedy is identical
 either way — register (or re-register) a valid, active agent.
+
+## Phase 5 — Reversibility Ladder + Policy Gate
+
+**Decision:** R03 ("envelope valid & unrevoked") is implemented as a
+simple existence lookup — does an `IntentEnvelope` row with this
+`envelope_id` exist at all — separate from R04
+(`verify_cart_within_envelope`), even though R04 *also* checks
+`revoked_at` and the valid window as its own first two sub-checks. This
+looks redundant but isn't: R03 catches "this envelope_id doesn't exist"
+(`ENVELOPE_INVALID`, a request-shape problem) before R04 ever runs its
+pure business-logic checks against a real, resolved envelope
+(`ENVELOPE_REVOKED`/`ENVELOPE_EXPIRED`, policy problems). Keeping them
+separate matches the spec's own R01-R12 table listing them as distinct
+rules with distinct reason codes.
+
+**Decision:** R08 (`reversibility >= env.min_reversibility`) and R09
+(`band == amber`) are two independent policy layers, not one collapsed
+check, exactly as the spec's rule table lists them. This means a red-band
+cart with `env.min_reversibility` set low (or 0) can pass R08 without
+escalating — R08 is the envelope-configurable "does this buyer's policy
+require human oversight below score X" trigger, while R09 is a fixed
+system policy: an amber-band cart always gets a mandatory cooling-off
+hold, regardless of what the envelope's own minimum says. In practice a
+sensibly-configured envelope sets `min_reversibility` at or above the
+amber threshold (0.40) so red bands always escalate too — but the gate
+enforces exactly what the spec's table says, not an inferred stronger
+guarantee.
+
+**Decision:** R10's velocity limit (`VELOCITY_WINDOW_S` /
+`VELOCITY_MAX_TRANSACTIONS`) and R12's idempotency-key TTL are not given
+numeric values by the spec — chosen as reasonable defaults and named in
+`config.py` rather than inlined, per the non-negotiable rule. Velocity is
+tracked as a Redis sorted set of per-agent timestamps (`ZADD`/
+`ZREMRANGEBYSCORE`/`ZCARD`), incremented only on a final `ALLOW` — an
+attempt that fails an earlier rule was never actually a transaction, so it
+shouldn't count against the agent's rate.
+
+**Decision:** `GateRequest` takes an already-assembled `Cart`,
+`reversibility_items`, and `quotes` rather than `run_gate` resolving a
+cart from scratch out of raw request fields. The gate's job (per the
+spec's R01-R12 table) is evaluating a fully-formed request, not building
+one — cart assembly (matching SKUs to quotes, defaulting
+`return_window_days`/`fulfilment_hours` from a product) is Phase 6's
+concern (checkout orchestration), kept out of this phase's already-large
+surface.
+
+**Honesty note — `harness/labels.json`:** the 60 hand-labeled carts were
+authored by this AI assistant reasoning independently about each cart
+(is the item custom/personalised, how large a slice of a plausible budget
+is it, how easily could it be resold), *not* by a human reviewer, and
+`scripts/gen_labels.py` deliberately never imports or calls
+`reversibility_score_detailed` so the label isn't secretly derived from
+the formula it's meant to validate. That keeps the Phase 9 accuracy
+measurement non-circular, but an AI-authored "hand label" is a materially
+weaker evidentiary claim than a genuine human-reviewed one, and the
+project says so plainly (README "What's real vs mocked") rather than
+presenting these labels as more authoritative than they are.

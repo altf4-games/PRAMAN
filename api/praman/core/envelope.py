@@ -51,6 +51,7 @@ class Envelope:
     max_single_txn_paise: int
     ceiling_paise: int
     spent_paise: int
+    min_reversibility: float = 0.0
 
 
 def verify_cart_within_envelope(cart: Cart, env: Envelope, now: datetime) -> GateResult:
