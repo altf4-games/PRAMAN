@@ -17,7 +17,7 @@ from sqlalchemy import select
 
 from praman.api.deps import DbSession
 from praman.models import Merchant, Product
-from praman.schemas import PolicyOut, ProductOut
+from praman.schemas import PolicyOut, ProductOut, ReviewProductOut
 
 router = APIRouter(prefix="/api", tags=["catalog"])
 
@@ -53,6 +53,34 @@ async def catalog_search(
         stmt = stmt.where(Product.name.ilike(f"%{q}%"))
     result = await session.execute(stmt.order_by(Product.name))
     return [_to_product_out(p) for p in result.scalars().all()]
+
+
+@router.get("/catalog/review-queue")
+async def catalog_review_queue(session: DbSession, merchant_id: str) -> list[ReviewProductOut]:
+    """The confidence review queue (CLAUDE.md §2/§7's `/catalog` page) —
+    products a low-confidence VLM extraction flagged `needs_review=True`.
+    Deliberately the mirror image of `catalog_search`: this is the only
+    place a needs-review product is ever returned over the API. Registered
+    before `/catalog/{product_id}` — a static path must win over a
+    dynamic one it would otherwise match ("review-queue" as a product id)."""
+    result = await session.execute(
+        select(Product)
+        .where(Product.merchant_id == merchant_id, Product.needs_review.is_(True))
+        .order_by(Product.id)
+    )
+    return [
+        ReviewProductOut(
+            id=p.id,
+            sku=p.sku,
+            name=p.name,
+            category=p.category,
+            unit_price_paise=p.unit_price_paise,
+            field_confidence=p.field_confidence,
+            source=p.source,
+            source_media_url=p.source_media_url,
+        )
+        for p in result.scalars().all()
+    ]
 
 
 @router.get("/catalog/{product_id}")

@@ -67,6 +67,77 @@ async def find_pending_approval_order(session: AsyncSession, merchant: Merchant)
     return result.scalars().first()
 
 
+async def list_pending_approvals(session: AsyncSession, merchant_id: str) -> list[Order]:
+    """The full inbox (CLAUDE.md §7's `/approvals` page), as opposed to
+    `find_pending_approval_order`'s "most recent one" used by the WhatsApp
+    reply handler, which only ever needs to act on a single message."""
+    result = await session.execute(
+        select(Order)
+        .join(CartMandate, Order.cart_id == CartMandate.cart_id)
+        .join(IntentEnvelope, CartMandate.envelope_id == IntentEnvelope.envelope_id)
+        .where(IntentEnvelope.merchant_id == merchant_id, Order.status == "pending_approval")
+        .order_by(Order.created_at.desc())
+    )
+    return list(result.scalars().all())
+
+
+async def decide_by_order_id(
+    session: AsyncSession,
+    redis: Redis,
+    registry: AgentRegistry,
+    razorpay: RazorpayClient,
+    whatsapp: WhatsAppClient,
+    llm: LLMClient,
+    order_id: str,
+    decision: str,
+    *,
+    demo_mode: bool = False,
+    now: datetime | None = None,
+) -> Order:
+    """The REST `/api/approvals/{order_id}/decide` entrypoint — same
+    `_approve`/`_decline` logic the WhatsApp reply handler uses, just
+    addressed by `order_id` directly instead of "the merchant's most
+    recent pending order", so the frontend's Approve/Decline buttons and a
+    merchant's WhatsApp reply can never disagree about what actually ran."""
+    resolved_now = now if now is not None else datetime.now(UTC)
+    order_result = await session.execute(select(Order).where(Order.id == order_id))
+    order = order_result.scalar_one_or_none()
+    if order is None or order.status != "pending_approval":
+        raise ValueError(f"order {order_id!r} is not pending approval")
+
+    env_result = await session.execute(
+        select(IntentEnvelope, Merchant)
+        .join(CartMandate, IntentEnvelope.envelope_id == CartMandate.envelope_id)
+        .join(Merchant, IntentEnvelope.merchant_id == Merchant.id)
+        .where(CartMandate.cart_id == order.cart_id)
+    )
+    row = env_result.first()
+    if row is None:
+        raise ValueError(f"order {order_id!r} has no resolvable merchant")
+    merchant = row[1]
+
+    if decision == "decline":
+        await _decline(session, whatsapp, merchant, order, resolved_now)
+    elif decision == "approve":
+        await _approve(
+            session,
+            redis,
+            registry,
+            razorpay,
+            whatsapp,
+            llm,
+            merchant,
+            order,
+            demo_mode,
+            resolved_now,
+        )
+    else:
+        raise ValueError(f"decision must be 'approve' or 'decline', got {decision!r}")
+
+    await session.refresh(order)
+    return order
+
+
 async def handle_merchant_reply(
     session: AsyncSession,
     redis: Redis,

@@ -213,3 +213,82 @@ class OrderUndoIn(BaseModel):
 
 class OrderUndoOut(BaseModel):
     cancelled: bool
+
+
+# --- merchants (frontend plumbing — the /onboard and /live pages need a
+# merchant picker; not one of CLAUDE.md's ten MCP tools) ---
+
+
+class MerchantOut(BaseModel):
+    id: str
+    name: str
+    did: str
+    whatsapp_number: str
+    onboarding_state: str
+    agent_policy: dict[str, object]
+
+
+# --- review queue (frontend plumbing for /catalog) ---
+
+
+class ReviewProductOut(BaseModel):
+    id: str
+    sku: str
+    name: str
+    category: str
+    unit_price_paise: int
+    field_confidence: dict[str, float]
+    source: str
+    source_media_url: str | None
+
+
+# --- approvals inbox (frontend plumbing for /approvals, mirroring the
+# WhatsApp inbox `whatsapp/approvals.py` already drives) ---
+
+
+class ApprovalOut(BaseModel):
+    order_id: str
+    cart_id: str
+    merchant_id: str
+    item_summary: str
+    total_paise: int
+    reason_code: str
+    reversibility_score: float
+    reversibility_breakdown: dict[str, float]
+    band: str
+    created_at: str
+    deadline: str
+
+
+class ApprovalDecideIn(BaseModel):
+    decision: str  # "approve" | "decline"
+
+
+class ApprovalDecideOut(BaseModel):
+    decision: str
+    order_status: str
+
+
+# --- dispute pack (Phase 8 preview — pulled forward because /dispute/[id]
+# needs real content to render, not a stub) ---
+
+
+class DisputePackOut(BaseModel):
+    cart_id: str
+    envelope: dict[str, object]
+    cart_mandate: dict[str, object]
+    order: dict[str, object] | None
+    gate_trail: list[dict[str, object]]
+    reversibility_breakdown: dict[str, float]
+    band: str
+    ledger: dict[str, object]
+
+
+# --- metrics (frontend plumbing for `/` 's live counter and `/metrics`) ---
+
+
+class MetricsOut(BaseModel):
+    sessions_gated: int
+    orders_by_status: dict[str, int]
+    orders_by_band: dict[str, int]
+    disputes_resolvable: int

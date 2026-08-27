@@ -9,11 +9,15 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from praman.api.routes_agents import router as agents_router
+from praman.api.routes_approvals import router as approvals_router
 from praman.api.routes_cart import router as cart_router
 from praman.api.routes_catalog import router as catalog_router
 from praman.api.routes_checkout import router as checkout_router
+from praman.api.routes_dispute import router as dispute_router
 from praman.api.routes_envelope import router as envelope_router
 from praman.api.routes_events import router as events_router
+from praman.api.routes_merchants import router as merchants_router
+from praman.api.routes_metrics import router as metrics_router
 from praman.api.routes_quotes import router as quotes_router
 from praman.api.routes_razorpay_webhook import router as razorpay_webhook_router
 from praman.api.routes_well_known import router as well_known_router
@@ -57,10 +61,14 @@ app.add_middleware(
 app.include_router(events_router, prefix="/api")
 app.include_router(catalog_router)
 app.include_router(agents_router)
+app.include_router(merchants_router)
 app.include_router(envelope_router)
 app.include_router(quotes_router)
 app.include_router(cart_router)
 app.include_router(checkout_router)
+app.include_router(approvals_router)
+app.include_router(dispute_router)
+app.include_router(metrics_router)
 app.include_router(razorpay_webhook_router)
 app.include_router(well_known_router)
 app.include_router(whatsapp_router)
