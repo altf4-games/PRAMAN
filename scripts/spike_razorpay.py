@@ -29,7 +29,7 @@ from dotenv import load_dotenv
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "api"))
 
-from praman.adapters.razorpay_client import (  # noqa: E402
+from praman.adapters.razorpay_client import (
     FakeRazorpayClient,
     RealRazorpayClient,
 )
@@ -105,7 +105,9 @@ def main() -> None:
         receipt="spike-phase0-001",
         notes={"purpose": "phase0-spike"},
     )
-    print(f"    real order created: {order.order_id} status={order.status} amount={order.amount_paise}")
+    print(
+        f"    real order created: {order.order_id} status={order.status} amount={order.amount_paise}"
+    )
 
     # --- 2. drive to captured ---
     step(2, "drive order to captured")
@@ -154,9 +156,9 @@ def main() -> None:
     assert not ok_tampered, "verification incorrectly accepted a tampered body"
 
     print("\n--- SPIKE RESULT ---")
-    print(f"order.create   : real")
+    print("order.create   : real")
     print(f"drive-to-capture: {path_used}")
-    print(f"webhook verify : real (code path), synthetic (delivery)")
+    print("webhook verify : real (code path), synthetic (delivery)")
     print("PASS")
 
 

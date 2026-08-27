@@ -170,9 +170,7 @@ class FakeRazorpayClient:
         return self._payments[payment_id]
 
     def verify_webhook_signature(self, body: bytes, signature: str) -> bool:
-        expected = hmac.new(
-            self._webhook_secret.encode(), body, hashlib.sha256
-        ).hexdigest()
+        expected = hmac.new(self._webhook_secret.encode(), body, hashlib.sha256).hexdigest()
         return hmac.compare_digest(expected, signature)
 
     def sign(self, body: bytes) -> str:
