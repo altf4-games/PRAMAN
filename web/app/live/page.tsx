@@ -385,10 +385,13 @@ export default function LivePage() {
                   <div className="mt-2">
                     <p className="text-xs text-ink-muted mb-1">
                       Real Razorpay order created; S2S test-card capture isn&apos;t enabled on
-                      this account, so a real payment needs a real Checkout.js round-trip —
-                      use Razorpay&apos;s own test card{" "}
-                      <span className="font-mono">4111 1111 1111 1111</span>, any future
-                      expiry/CVV.
+                      this account, so a real payment needs a real Checkout.js round-trip — use
+                      Razorpay&apos;s <strong>domestic</strong> Mastercard test card{" "}
+                      <span className="font-mono">5267 3181 8797 5449</span>, any future
+                      expiry/CVV, any OTP. (
+                      <span className="font-mono">4111 1111 1111 1111</span> is flagged as an
+                      international card and this account has those disabled — it&apos;ll fail
+                      with &quot;international cards not allowed&quot;.)
                     </p>
                     <button
                       type="button"

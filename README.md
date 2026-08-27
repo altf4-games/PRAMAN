@@ -209,9 +209,13 @@ The full log — every ambiguous call, the option taken, and why — lives in
   from the `/live` page — captures a real payment against it, verified
   server-side (`verify_payment_signature`, then a payment-status re-check)
   before the order dispatches or starts its cooling-off window. Use
-  Razorpay's own published test card (`4111 1111 1111 1111`, any future
-  expiry/CVV) to complete it. This is genuinely captured — it appears as a
-  real Payment in the Razorpay test dashboard, not a simulated one.
+  Razorpay's **domestic** Mastercard test card (`5267 3181 8797 5449`, any
+  future expiry/CVV, any OTP) to complete it — this account has
+  international cards disabled, so the globally-published
+  `4111 1111 1111 1111` test number fails with "international cards not
+  allowed" (a real, live-confirmed account setting, not a bug in this
+  build). This is genuinely captured — it appears as a real Payment in the
+  Razorpay test dashboard, not a simulated one.
   `FakeRazorpayClient` (used by every automated test and the harness, and
   by any deployment with `RAZORPAY_USE_FAKE=true`) captures synchronously
   and instantly with no browser involved, so CI needs neither Razorpay nor
