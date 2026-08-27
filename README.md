@@ -157,9 +157,30 @@ repo.)
   shortcut; the standard way anyone tries Twilio's WhatsApp integration
   without a business-verified sender). Confirmed live, end to end, over an
   ngrok tunnel from a real phone:
-  - **Inbound works fully and for real** — Twilio's actual signature was
-    verified (not faked), a real `Merchant` was created, and the state
-    machine correctly transitioned `NEW → AWAITING_MEDIA`.
+  - **Inbound webhook delivery works fully and for real** — Twilio's
+    actual signature was verified (not faked), a real `Merchant` was
+    created, and the state machine correctly transitioned
+    `NEW → AWAITING_MEDIA`.
+  - **Downloading an inbound photo's media is blocked at the Twilio
+    account level, not in our code — a second, more fundamental
+    limitation than the outbound one below.** Confirmed live, from a real
+    phone against the deployed Railway API: the webhook fires and
+    `NumMedia`/`MediaUrl0` arrive correctly, but fetching that media URL
+    (`RealTwilioClient.fetch_media`, an authenticated GET against Twilio's
+    Messages/Media REST resource) returns `401 code 20003: "This feature
+    is not available on a Trial account. Please upgrade your account to
+    gain access."` — verified directly with `curl` against Twilio's API
+    using the account's own credentials, not just observed as an
+    app-level failure. This account restriction applies to *any* number
+    (the classic Sandbox included), not just the newer self-service trial
+    number, and blocks the catalog-extraction pipeline entirely for a
+    real inbound photo until the account is upgraded with billing. A real
+    bug this surfaced and fixed: a media-fetch failure used to raise
+    unhandled and 500 the whole webhook; it's now caught and logged per
+    item, same as a bad *extraction* already was, so one undownloadable
+    photo can't take down message handling for the rest of the batch
+    (or, in DEMO_MODE, degrade to "no photo, please send one" instead of
+    an opaque error) — see `ARCHITECTURE.md`.
   - **Outbound is blocked at the Twilio account level, not in our code.**
     This account type requires every outbound WhatsApp message — even a
     same-session reply, not just a business-initiated one outside the

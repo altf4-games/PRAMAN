@@ -117,6 +117,29 @@ def test_webhook_accepts_correctly_signed_request(monkeypatch: pytest.MonkeyPatc
     assert response.status_code == 200
 
 
+def test_webhook_survives_a_media_fetch_failure(client_with_fake_twilio: TestClient) -> None:
+    """A real bug found via live testing: a Twilio trial account can't
+    fetch Message/Media resources via the REST API at all (confirmed:
+    401, code 20003, 'not available on a Trial account') — before this
+    fix, that turned into an unhandled exception that 500'd the whole
+    webhook. `MediaUrl0` here is never registered with
+    `FakeWhatsAppClient`, so `fetch_media` raises exactly the way a real
+    fetch failure would; the webhook must still return 200 and the
+    merchant's state machine must still run (with an empty media list),
+    not crash."""
+    response = client_with_fake_twilio.post(
+        "/wa/webhook",
+        data={
+            "From": "whatsapp:+919876543299",
+            "Body": "",
+            "NumMedia": "1",
+            "MediaUrl0": "https://api.twilio.com/unregistered-media",
+        },
+    )
+    assert response.status_code == 200
+    assert "<Response>" in response.text
+
+
 def test_webhook_routes_live_merchant_reply_to_approvals(monkeypatch: pytest.MonkeyPatch) -> None:
     """A LIVE merchant's own number should try the approval inbox before
     falling through to onboarding — even though nothing is actually

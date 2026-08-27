@@ -15,6 +15,7 @@ downstream of it.
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, Request
@@ -34,6 +35,7 @@ from praman.whatsapp.cooling_off_notify import handle_buyer_reply
 from praman.whatsapp.onboarding import handle_inbound_whatsapp
 
 router = APIRouter(tags=["whatsapp"])
+logger = logging.getLogger(__name__)
 
 
 def _webhook_url(request: Request) -> str:
@@ -70,7 +72,23 @@ async def whatsapp_webhook(request: Request) -> Response:
         media_url = params.get(f"MediaUrl{i}")
         if not media_url:
             continue
-        content_bytes, content_type = await whatsapp.fetch_media(media_url)
+        try:
+            content_bytes, content_type = await whatsapp.fetch_media(media_url)
+        except Exception:
+            # A media *download* failure (e.g. a Twilio trial account that
+            # can't fetch Message/Media resources via the REST API at all —
+            # a real, confirmed account-tier restriction, not a transient
+            # blip) must not crash the whole webhook. Same "one bad photo
+            # shouldn't sink the batch" principle already applied to a bad
+            # *extraction* in onboarding.py — this is the same failure
+            # mode one step earlier, and deserves the same resilience.
+            logger.warning(
+                "wa/webhook: failed to fetch media %s from %s",
+                media_url,
+                from_number,
+                exc_info=True,
+            )
+            continue
         media.append((content_bytes, content_type))
 
     llm = get_llm_client(settings)

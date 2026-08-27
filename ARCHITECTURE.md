@@ -661,3 +661,38 @@ Decline; `/dispute/[orderId]` was checked against a real captured order's
 full pack; `/metrics` and the homepage counter were checked against real
 seeded data; mobile-viewport screenshots confirmed the nav and `/live`'s
 three-column grid both reflow correctly below 768px.
+
+## Post-Phase-7 — a real Twilio finding from live phone testing
+
+**Finding (confirmed via `curl` against Twilio's own API, not just
+observed in-app):** this project's Twilio account, being on the Trial
+tier, cannot fetch `Message`/`Media` REST resources at all —
+`401 code 20003: "This feature is not available on a Trial account.
+Please upgrade your account to gain access."` This is a *second*, more
+fundamental limitation than the already-documented "outbound needs an
+approved Content Template" one: it blocks downloading an inbound photo's
+media, on any number (the classic shared Sandbox included, not just the
+newer self-service trial number `whatsapp/routes_whatsapp.py` was first
+tested against). Switching `TWILIO_WHATSAPP_FROM` to the classic Sandbox
+(`+14155238886`) — done in response to the user finding a "Connect to
+WhatsApp Sandbox" page with a join code — did not fix this, because the
+restriction lives at the account tier, not the number.
+
+**Decision (a real bug this surfaced and fixed):** `routes_whatsapp.py`'s
+media-fetch loop previously let `fetch_media`'s exception propagate
+unhandled, which crashed the entire webhook handler with a 500 — meaning
+a message with an undownloadable photo never even reached the state
+machine; no ledger event, no merchant creation, nothing. Wrapped in a
+try/except per media item, logging a warning and skipping just that item
+— the same "one bad photo shouldn't sink the batch" principle already
+applied to a bad *extraction* in `onboarding.py`'s loop, just one step
+earlier in the pipeline. With this fix, a photo that can't be downloaded
+now degrades to the state machine seeing zero usable media (and replying
+"I need at least one photo…", same as if none were attached) rather than
+the request failing outright.
+
+**Not fixed, because it can't be from our side:** the actual ability to
+download and extract a real vendor's photo end-to-end over live WhatsApp
+remains blocked until the Twilio account is upgraded with billing. This
+is disclosed plainly in the README rather than worked around — there is
+no code-level workaround for an account-tier API restriction.
