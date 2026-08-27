@@ -19,7 +19,7 @@ const DECISION_TONE: Record<string, string> = {
 };
 
 /** The ordered R01-R12 policy-gate trail — every rule the request was
- * checked against, first non-ALLOW wins (CLAUDE.md §5). Used on `/live`
+ * checked against, first non-ALLOW wins (the design spec §5). Used on `/live`
  * (a live decision) and `/dispute/[orderId]` (the full historical trail
  * from `GateDecision` rows). */
 export function GateTrail({ entries }: { entries: GateTrailEntry[] }) {

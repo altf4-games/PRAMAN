@@ -1,5 +1,5 @@
 """Tests for `harness/sessions.py`'s session-building logic — the exact
-category counts from CLAUDE.md §8's table, and the envelope-sizing fix
+category counts from the design spec's §8 table, and the envelope-sizing fix
 (sessions.py's own comments explain why a flat ceiling was a harness bug,
 not a gate finding) that a regression here would silently reintroduce."""
 
@@ -14,7 +14,7 @@ def test_build_sessions_produces_200_sessions() -> None:
     assert len(build_sessions()) == 200
 
 
-def test_category_counts_match_claude_md_table() -> None:
+def test_category_counts_match_design_spec_table() -> None:
     counts = Counter(s.category for s in build_sessions())
     assert counts == {
         "benign_green": 90,

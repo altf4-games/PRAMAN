@@ -1,6 +1,6 @@
 """`harness/injection_corpus.py` just needs to hold 15 distinct, non-empty
 strings — `sessions.py` zips one per prompt-injection session, and
-CLAUDE.md §8's table commits to exactly 15 of them."""
+the design spec's §8 table commits to exactly 15 of them."""
 
 from __future__ import annotations
 

@@ -20,7 +20,7 @@ typecheck:
 	mypy api/praman
 
 # Runs the messy raw/ inputs (scraped HTML, inconsistent-unit CSV, photos)
-# through the live LLM extraction pipeline (CLAUDE.md Phase 2 acceptance).
+# through the live LLM extraction pipeline (the design spec's Phase 2 acceptance).
 ingest:
 	python -m praman.ingest.pipeline raw api/praman/seed/raw --out /tmp/praman_raw_ingest.json
 
@@ -34,6 +34,6 @@ ingest-catalogs:
 # Regenerates harness/labels.json (the 60 hand-labeled carts). Not run
 # automatically — the committed labels.json is the frozen ground truth the
 # Phase 9 harness measures against; re-running this after seeing accuracy
-# numbers would defeat the point (CLAUDE.md §5).
+# numbers would defeat the point (the design spec §5).
 labels:
 	python scripts/gen_labels.py

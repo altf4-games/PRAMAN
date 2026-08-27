@@ -1,6 +1,6 @@
 """Shared error types. Every rejection in this system carries a
 `reason_code`, `detail`, and `remedy` — this is a non-negotiable rule
-(CLAUDE.md §0), not a convention to follow when convenient.
+(the design spec §0), not a convention to follow when convenient.
 """
 
 from __future__ import annotations

@@ -24,7 +24,7 @@ function formatTime(ts: string): string {
 export interface LedgerStreamProps {
   events: LedgerBusEvent[];
   connected?: boolean;
-  /** Shows the "Break the ledger" demo control — CLAUDE.md §7: corrupts a
+  /** Shows the "Break the ledger" demo control — the design spec §7: corrupts a
    * row's displayed hash client-side only (nothing server-side is ever
    * touched — a real dispute ledger doesn't get a button that mutates it)
    * and turns the chain-proof strip red from that row forward. Off by

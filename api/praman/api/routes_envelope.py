@@ -1,4 +1,4 @@
-"""`envelope_submit` (CLAUDE.md §6). An Intent Envelope is countersigned by
+"""`envelope_submit` (the design spec §6). An Intent Envelope is countersigned by
 the *merchant* — the storefront issuing the one-time consent a buyer's agent
 will operate within (UPI Reserve Pay semantics: one-time consent, a
 ceiling, instant revocability) — not by the agent itself, so this route

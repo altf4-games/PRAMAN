@@ -1,11 +1,11 @@
 """Read-only catalog + policy routes — `catalog_search`, `catalog_get`,
-`policy_get` in the MCP tool table (CLAUDE.md §6), all `readOnlyHint: true`.
+`policy_get` in the MCP tool table (the design spec §6), all `readOnlyHint: true`.
 No agent signature required: this is the publicly agent-readable part of a
 storefront, by design — an agent needs to be able to browse before it has
 any reason to authenticate.
 
 A product with `needs_review=True` is never returned here, at either route
-— CLAUDE.md §2's anti-hallucination gate at the data layer ("never exposed
+— the design spec's §2 anti-hallucination gate at the data layer ("never exposed
 to agents until confirmed") applies exactly as much to a direct `catalog_get`
 by id as it does to `catalog_search`.
 """
@@ -57,7 +57,7 @@ async def catalog_search(
 
 @router.get("/catalog/review-queue")
 async def catalog_review_queue(session: DbSession, merchant_id: str) -> list[ReviewProductOut]:
-    """The confidence review queue (CLAUDE.md §2/§7's `/catalog` page) —
+    """The confidence review queue (the design spec §2/§7's `/catalog` page) —
     products a low-confidence VLM extraction flagged `needs_review=True`.
     Deliberately the mirror image of `catalog_search`: this is the only
     place a needs-review product is ever returned over the API. Registered

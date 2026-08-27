@@ -1,4 +1,4 @@
-"""SQLAlchemy models — the full data model from CLAUDE.md §3.
+"""SQLAlchemy models — the full data model from the design spec §3.
 
 Ids are UUID4 hex strings (portable across Postgres and the sqlite used in
 tests). Money is always `int` paise. Timestamps are timezone-aware UTC.

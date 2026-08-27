@@ -26,7 +26,7 @@ function useCountdown(deadline: string): string {
 }
 
 /**
- * Mirrors the merchant's WhatsApp inbox (CLAUDE.md §7) — every action here
+ * Mirrors the merchant's WhatsApp inbox (the design spec §7) — every action here
  * calls the exact same `_approve`/`_decline` path a WhatsApp reply does
  * (`whatsapp/approvals.py::decide_by_order_id`), so the two stay in sync.
  */

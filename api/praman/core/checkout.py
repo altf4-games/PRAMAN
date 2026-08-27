@@ -1,5 +1,5 @@
 """Checkout orchestration — what happens after the gate decides. An order
-is created only after ALLOW or HOLD (CLAUDE.md §6): a BLOCK/SUBSTITUTE
+is created only after ALLOW or HOLD (the design spec §6): a BLOCK/SUBSTITUTE
 never touches Razorpay, and an ESCALATE creates a pending order awaiting
 merchant approval but never captures payment until that approval lands.
 """
@@ -166,8 +166,35 @@ async def _handle_allow(
     order_row, payment, path = create_and_capture_order(
         razorpay, cart.total_paise, "INR", cart.cart_id, notes
     )
-    logger.info("checkout: order %s captured via %s path", order_row.order_id, path)
+    logger.info("checkout: order %s via %s path", order_row.order_id, path)
 
+    if path == "pending_real_checkout":
+        # Real Razorpay order, no payment captured yet — the frontend must
+        # complete a genuine Checkout.js round-trip and call
+        # `confirm_real_payment` below before this order dispatches. See
+        # `create_and_capture_order`'s docstring for why.
+        order = await _create_order_row(
+            session,
+            cart,
+            razorpay_order_id=order_row.order_id,
+            razorpay_payment_id=None,
+            status="awaiting_payment",
+            idempotency_key=idempotency_key,
+            cooling_off_until=None,
+            dispatched_at=None,
+            now=now,
+            existing_order=existing_order,
+        )
+        await append_event(
+            session,
+            gate_req.session_id,
+            gate_req.agent_did,
+            "ORDER_AWAITING_PAYMENT",
+            {"order_id": order.id, "razorpay_order_id": order_row.order_id},
+        )
+        return CheckoutResult(gate_result=result, order=order)
+
+    assert payment is not None  # only None for 'pending_real_checkout', handled above
     order = await _create_order_row(
         session,
         cart,
@@ -206,12 +233,34 @@ async def _handle_hold(
     order_row, payment, path = create_and_capture_order(
         razorpay, cart.total_paise, "INR", cart.cart_id, notes
     )
-    logger.info(
-        "checkout: amber order %s captured via %s path, held for cooling-off",
-        order_row.order_id,
-        path,
-    )
+    logger.info("checkout: amber order %s via %s path", order_row.order_id, path)
 
+    if path == "pending_real_checkout":
+        # Same real-order-not-yet-captured situation as `_handle_allow`,
+        # except the cooling-off timer must only start once a real payment
+        # is actually confirmed — `confirm_real_payment` computes it then.
+        order = await _create_order_row(
+            session,
+            cart,
+            razorpay_order_id=order_row.order_id,
+            razorpay_payment_id=None,
+            status="awaiting_payment_amber",
+            idempotency_key=idempotency_key,
+            cooling_off_until=None,
+            dispatched_at=None,
+            now=now,
+            existing_order=existing_order,
+        )
+        await append_event(
+            session,
+            gate_req.session_id,
+            gate_req.agent_did,
+            "ORDER_AWAITING_PAYMENT",
+            {"order_id": order.id, "razorpay_order_id": order_row.order_id, "band": "amber"},
+        )
+        return CheckoutResult(gate_result=result, order=order)
+
+    assert payment is not None  # only None for 'pending_real_checkout', handled above
     cooling_off_until = compute_cooling_off_until(now, demo_mode=demo_mode)
     order = await _create_order_row(
         session,
@@ -237,12 +286,25 @@ async def _handle_hold(
             "capture_path": path,
         },
     )
+    await _notify_buyer_cooling_off(
+        session, whatsapp, cart, gate_req.envelope_id, cooling_off_until, now
+    )
+    return CheckoutResult(gate_result=result, order=order)
 
+
+async def _notify_buyer_cooling_off(
+    session: AsyncSession,
+    whatsapp: WhatsAppClient,
+    cart: CartMandate,
+    envelope_id: str,
+    cooling_off_until: datetime,
+    now: datetime,
+) -> None:
     env_result = await session.execute(
-        select(IntentEnvelope).where(IntentEnvelope.envelope_id == gate_req.envelope_id)
+        select(IntentEnvelope).where(IntentEnvelope.envelope_id == envelope_id)
     )
     env_row = env_result.scalar_one_or_none()
-    merchant = await _get_merchant_for_envelope(session, gate_req.envelope_id)
+    merchant = await _get_merchant_for_envelope(session, envelope_id)
     item_summary = ", ".join(f"{item['qty']}x {item['sku']}" for item in cart.items)
     if merchant is not None and env_row is not None:
         window_minutes = int((cooling_off_until - now).total_seconds() // 60) or 1
@@ -251,8 +313,6 @@ async def _handle_hold(
             await whatsapp.send_text(env_row.user_whatsapp, message)
         except Exception:
             logger.warning("checkout: failed to send buyer cooling-off notification", exc_info=True)
-
-    return CheckoutResult(gate_result=result, order=order)
 
 
 async def _handle_escalate(
@@ -309,6 +369,102 @@ async def _handle_escalate(
     return CheckoutResult(gate_result=result, order=order)
 
 
+async def confirm_real_payment(
+    session: AsyncSession,
+    razorpay: RazorpayClient,
+    whatsapp: WhatsAppClient,
+    order: Order,
+    *,
+    razorpay_payment_id: str,
+    razorpay_signature: str,
+    now: datetime,
+    demo_mode: bool,
+) -> Order:
+    """Completes a real Checkout.js round-trip for an order the gate
+    already ALLOW'd or HOLD'd but that `create_and_capture_order` left in
+    `awaiting_payment(_amber)` because S2S test-card capture isn't
+    available (see that function's docstring). Verifies the browser's
+    success-callback signature *server-side* — never trusts the callback
+    alone, since a client-side "success" is just a claim until the
+    signature (computed from the key secret, which the browser never
+    sees) checks out — then applies whatever the original gate decision
+    was: immediate dispatch for a green order, or the start of the
+    cooling-off window for an amber one, exactly as `_handle_allow`/
+    `_handle_hold` would have done had a payment been captured instantly.
+    """
+    if order.status not in ("awaiting_payment", "awaiting_payment_amber"):
+        raise ValueError(f"order {order.id} is not awaiting a real payment (status={order.status})")
+    if order.razorpay_order_id is None:
+        raise ValueError(f"order {order.id} has no razorpay_order_id to confirm against")
+
+    if not razorpay.verify_payment_signature(
+        order.razorpay_order_id, razorpay_payment_id, razorpay_signature
+    ):
+        raise ValueError("razorpay payment signature does not verify")
+
+    cart_result = await session.execute(
+        select(CartMandate).where(CartMandate.cart_id == order.cart_id)
+    )
+    cart = cart_result.scalar_one_or_none()
+    if cart is None:
+        raise ValueError(f"cart {order.cart_id} not found for order {order.id}")
+
+    payment = razorpay.fetch_payment(razorpay_payment_id)
+    if payment.order_id != order.razorpay_order_id:
+        raise ValueError("payment does not belong to this order")
+    if payment.status == "authorized":
+        payment = razorpay.capture_payment(razorpay_payment_id, cart.total_paise)
+    if payment.status != "captured":
+        raise ValueError(f"payment {razorpay_payment_id} is not captured (status={payment.status})")
+
+    order.razorpay_payment_id = razorpay_payment_id
+    session_id = f"cart:{cart.cart_id}"
+
+    if order.status == "awaiting_payment_amber":
+        cooling_off_until = compute_cooling_off_until(now, demo_mode=demo_mode)
+        order.status = "captured"
+        order.cooling_off_until = cooling_off_until
+        session.add(order)
+        await session.commit()
+        await session.refresh(order)
+        await append_event(
+            session,
+            session_id,
+            cart.agent_did,
+            "ORDER_HELD_COOLING_OFF",
+            {
+                "order_id": order.id,
+                "razorpay_order_id": order.razorpay_order_id,
+                "razorpay_payment_id": razorpay_payment_id,
+                "cooling_off_until": cooling_off_until.isoformat(),
+                "capture_path": "real_checkout_js",
+            },
+        )
+        await _notify_buyer_cooling_off(
+            session, whatsapp, cart, cart.envelope_id, cooling_off_until, now
+        )
+        return order
+
+    order.status = "captured"
+    order.dispatched_at = now
+    session.add(order)
+    await session.commit()
+    await session.refresh(order)
+    await append_event(
+        session,
+        session_id,
+        cart.agent_did,
+        "ORDER_DISPATCHED",
+        {
+            "order_id": order.id,
+            "razorpay_order_id": order.razorpay_order_id,
+            "razorpay_payment_id": razorpay_payment_id,
+            "capture_path": "real_checkout_js",
+        },
+    )
+    return order
+
+
 async def cancel_order(
     session: AsyncSession,
     razorpay: RazorpayClient,
@@ -325,7 +481,7 @@ async def cancel_order(
     ledgered) if the order isn't in a cancellable state — already
     dispatched, already cancelled, or never held for cooling-off in the
     first place; a cancellation only ever undoes a *held* order, never a
-    dispatched one (CLAUDE.md's cooling-off window is exactly the "still
+    dispatched one (the design spec's cooling-off window is exactly the "still
     undoable" window). `amount_paise` is the caller's responsibility (the
     cart total) since `Order` itself doesn't carry an amount column —
     every call site already has the cart in scope to read it from.

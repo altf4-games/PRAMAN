@@ -1,7 +1,7 @@
 """APScheduler sweeps — the two time-driven transitions nothing else
 triggers: an amber order dispatching once its cooling-off window elapses
 unclaimed, and a merchant-approval escalation timing out after
-`MERCHANT_APPROVAL_TIMEOUT_S` (default 15 min, CLAUDE.md §6).
+`MERCHANT_APPROVAL_TIMEOUT_S` (default 15 min, the design spec §6).
 
 `sweep_cooling_off_dispatch` / `sweep_approvals` take an explicit
 `AsyncSession` (same testability discipline as `gate.py`/`checkout.py`:

@@ -7,7 +7,7 @@
    rejected.
 2. The LLM ranks the *filtered* set and writes one rationale line. Any LLM
    failure (bad response, timeout, provider error) falls back to
-   cheapest-first — CLAUDE.md §0: the LLM is never load-bearing. It can
+   cheapest-first — the design spec §0: the LLM is never load-bearing. It can
    only reorder an already-safe candidate list, never expand it.
 """
 

@@ -2,7 +2,7 @@
 after it — unit strings, category vocabulary, duplicates, and the
 confidence gate that decides `needs_review`. Nothing here calls a model;
 every function is a pure, testable transformation. This is the
-anti-hallucination gate at the data layer (CLAUDE.md §2): a product that
+anti-hallucination gate at the data layer (the design spec §2): a product that
 fails the gate is never exposed to agents.
 """
 

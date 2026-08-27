@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generates `harness/labels.json` — 60 hand-labeled carts, committed
 BEFORE the Phase 9 harness ever runs `reversibility_score_detailed`
-against them (CLAUDE.md §5's validation protocol: "Tuning weights after
+against them (the design spec's §5 validation protocol: "Tuning weights after
 seeing accuracy makes the number worthless").
 
 Honesty note (see README/ARCHITECTURE "What's real vs mocked"): these are

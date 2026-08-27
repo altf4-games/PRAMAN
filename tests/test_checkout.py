@@ -9,14 +9,14 @@ from datetime import UTC, datetime, timedelta
 import fakeredis.aioredis
 import pytest
 from praman.adapters.llm import FakeLLMClient
-from praman.adapters.razorpay_client import FakeRazorpayClient
-from praman.core.checkout import execute_checkout
+from praman.adapters.razorpay_client import FakeRazorpayClient, RazorpayOrder
+from praman.core.checkout import confirm_real_payment, execute_checkout
 from praman.core.envelope import Cart, CartItem
 from praman.core.gate import GateRequest
 from praman.core.quotes import QuoteData, issue_quote
 from praman.core.registry import LocalRegistry
 from praman.crypto.keys import generate_keypair, sign
-from praman.models import Agent, CartMandate, IntentEnvelope, LedgerEvent, Merchant, Product
+from praman.models import Agent, CartMandate, IntentEnvelope, LedgerEvent, Merchant, Order, Product
 from praman.whatsapp.client import FakeWhatsAppClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -377,3 +377,121 @@ async def test_substitute_offers_ranked_candidates(
     assert result.order is None
     assert [c.sku for c in result.substitution_offer] == ["substitute-sku"]
     assert result.substitution_rationale == "closest match"
+
+
+# --- confirm_real_payment: the second step of a real Checkout.js round
+# trip, exercised directly against a FakeRazorpayClient standing in for
+# an order that create_and_capture_order would have left in
+# 'awaiting_payment(_amber)' had S2S capture been unavailable. ---
+
+
+async def _seed_awaiting_order(
+    db_session: AsyncSession,
+    scenario: Scenario,
+    razorpay: FakeRazorpayClient,
+    *,
+    status: str,
+) -> tuple[Order, RazorpayOrder]:
+    order_row = razorpay.create_order(scenario.cart.total_paise, "INR", scenario.cart.cart_id, {})
+    order = Order(
+        cart_id=scenario.cart.cart_id,
+        razorpay_order_id=order_row.order_id,
+        razorpay_payment_id=None,
+        status=status,
+        idempotency_key=f"idem-{scenario.cart.cart_id}",
+        created_at=NOW,
+    )
+    db_session.add(order)
+    await db_session.commit()
+    await db_session.refresh(order)
+    return order, order_row
+
+
+async def test_confirm_real_payment_dispatches_a_green_order(db_session: AsyncSession) -> None:
+    redis = fakeredis.aioredis.FakeRedis(decode_responses=True)
+    scenario = await _build_scenario(db_session, redis)
+    razorpay = FakeRazorpayClient()
+    whatsapp = FakeWhatsAppClient()
+    order, order_row = await _seed_awaiting_order(
+        db_session, scenario, razorpay, status="awaiting_payment"
+    )
+
+    payment_id = "pay_checkoutjs_1"
+    signature = razorpay.sign_payment(order_row.order_id, payment_id)
+    # FakeRazorpayClient.fetch_payment needs a payment to already exist —
+    # a real Checkout.js flow auto-captures via payment_capture:1, so a
+    # captured payment already exists by the time the browser calls back.
+    razorpay.capture_payment(payment_id, scenario.cart.total_paise)
+
+    confirmed = await confirm_real_payment(
+        db_session,
+        razorpay,
+        whatsapp,
+        order,
+        razorpay_payment_id=payment_id,
+        razorpay_signature=signature,
+        now=NOW,
+        demo_mode=False,
+    )
+
+    assert confirmed.status == "captured"
+    assert confirmed.dispatched_at is not None
+    assert confirmed.dispatched_at.replace(tzinfo=UTC) == NOW
+    assert confirmed.razorpay_payment_id == payment_id
+
+
+async def test_confirm_real_payment_starts_cooling_off_for_an_amber_order(
+    db_session: AsyncSession,
+) -> None:
+    redis = fakeredis.aioredis.FakeRedis(decode_responses=True)
+    scenario = await _build_scenario(db_session, redis)
+    razorpay = FakeRazorpayClient()
+    whatsapp = FakeWhatsAppClient()
+    order, order_row = await _seed_awaiting_order(
+        db_session, scenario, razorpay, status="awaiting_payment_amber"
+    )
+
+    payment_id = "pay_checkoutjs_2"
+    signature = razorpay.sign_payment(order_row.order_id, payment_id)
+    razorpay.capture_payment(payment_id, scenario.cart.total_paise)
+
+    confirmed = await confirm_real_payment(
+        db_session,
+        razorpay,
+        whatsapp,
+        order,
+        razorpay_payment_id=payment_id,
+        razorpay_signature=signature,
+        now=NOW,
+        demo_mode=True,
+    )
+
+    assert confirmed.status == "captured"
+    assert confirmed.dispatched_at is None
+    assert confirmed.cooling_off_until is not None
+    assert confirmed.cooling_off_until.replace(tzinfo=UTC) > NOW
+
+
+async def test_confirm_real_payment_rejects_an_invalid_signature(db_session: AsyncSession) -> None:
+    redis = fakeredis.aioredis.FakeRedis(decode_responses=True)
+    scenario = await _build_scenario(db_session, redis)
+    razorpay = FakeRazorpayClient()
+    whatsapp = FakeWhatsAppClient()
+    order, _order_row = await _seed_awaiting_order(
+        db_session, scenario, razorpay, status="awaiting_payment"
+    )
+
+    payment_id = "pay_checkoutjs_3"
+    razorpay.capture_payment(payment_id, scenario.cart.total_paise)
+
+    with pytest.raises(ValueError, match="signature"):
+        await confirm_real_payment(
+            db_session,
+            razorpay,
+            whatsapp,
+            order,
+            razorpay_payment_id=payment_id,
+            razorpay_signature="not-a-real-signature",
+            now=NOW,
+            demo_mode=False,
+        )

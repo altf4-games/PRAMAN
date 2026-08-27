@@ -9,7 +9,7 @@ from functools import lru_cache
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# --- Reversibility Ladder weights (CLAUDE.md §5) ---
+# --- Reversibility Ladder weights (the design spec §5) ---
 # Named constants, never inline literals, per the non-negotiable rule.
 REVERSIBILITY_WEIGHT_RETURN = 0.35
 REVERSIBILITY_WEIGHT_CLASS = 0.25
@@ -50,7 +50,7 @@ AGENT_CLOCK_SKEW_TOLERANCE_S = 60
 
 # --- Gate: velocity (R10) ---
 # "No more than N ALLOWed transactions per agent within a rolling window" —
-# guards against envelope drain by salami-slicing (CLAUDE.md §8 threat
+# guards against envelope drain by salami-slicing (the design spec §8 threat
 # model). Not specified numerically by the spec; chosen as a reasonable
 # default and named here rather than inlined, per the non-negotiable rule.
 VELOCITY_WINDOW_S = 60

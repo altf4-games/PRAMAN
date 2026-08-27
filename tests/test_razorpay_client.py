@@ -83,12 +83,13 @@ def test_create_and_capture_order_falls_back_when_s2s_unavailable(
 
     order, payment, path = create_and_capture_order(client, 15_000, "INR", "receipt-1", {})
 
-    assert path == "fake"
+    # S2S capture unavailable: the order is still real (visible in the
+    # Razorpay dashboard), but no payment is fabricated for it — capturing
+    # a genuine payment now needs a real Checkout.js round-trip, which
+    # only a browser can drive (see the docstring on this function).
+    assert path == "pending_real_checkout"
     assert order.order_id == "order_real_123"
-    # payment is reported under the REAL order's id even though capture
-    # itself ran through the fake path.
-    assert payment.order_id == "order_real_123"
-    assert payment.status == "captured"
+    assert payment is None
 
 
 def test_create_and_capture_order_uses_real_path_when_s2s_succeeds(

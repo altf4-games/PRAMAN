@@ -1,4 +1,4 @@
-"""Runs one `SessionSpec` through both arms (CLAUDE.md §8):
+"""Runs one `SessionSpec` through both arms (the design spec §8):
 
 - **Arm A (naive):** unsigned reads, no envelope, no gate, direct
   checkout — captures whatever the agent originally quoted itself,

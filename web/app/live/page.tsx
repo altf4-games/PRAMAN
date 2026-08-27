@@ -29,6 +29,28 @@ type CheckoutResult = {
   order_status: string | null;
 };
 
+declare global {
+  interface Window {
+    Razorpay?: new (options: Record<string, unknown>) => { open: () => void };
+  }
+}
+
+/** Loads Razorpay's hosted Checkout.js once and reuses it — the real
+ * capture path for this test account, since server-to-server test-card
+ * capture isn't enabled on it (confirmed against the live API): a real
+ * Razorpay Order exists the moment the gate ALLOWs/HOLDs, but a real
+ * Payment only exists once this widget's card form actually runs. */
+function loadRazorpayCheckout(): Promise<void> {
+  if (window.Razorpay) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("failed to load Razorpay Checkout.js"));
+    document.body.appendChild(script);
+  });
+}
+
 export default function LivePage() {
   const [merchants, setMerchants] = useState<MerchantOut[]>([]);
   const [merchantId, setMerchantId] = useState<string>("");
@@ -43,6 +65,8 @@ export default function LivePage() {
   const [checkout, setCheckout] = useState<CheckoutResult | null>(null);
   const [userRef, setUserRef] = useState<string>("");
   const [postAction, setPostAction] = useState<string | null>(null);
+  const [payingLive, setPayingLive] = useState(false);
+  const [payError, setPayError] = useState<string | null>(null);
 
   useEffect(() => {
     api
@@ -154,6 +178,66 @@ export default function LivePage() {
       settleCall(false, err instanceof Error ? err.message : String(err));
     } finally {
       setRunning(false);
+    }
+  }
+
+  /** Opens Razorpay's real Checkout.js widget for an order the gate
+   * already ALLOW'd/HOLD'd but that's sitting in `awaiting_payment(_amber)`
+   * — a genuine Razorpay Order the backend created, waiting on a genuine
+   * captured Payment only a browser can produce. On success this POSTs
+   * the browser's signed callback to `/checkout/{order_id}/confirm`,
+   * which verifies it server-side before dispatching/holding the order —
+   * the widget's own "success" callback is never trusted on its own. */
+  async function payWithRazorpay() {
+    if (!checkout?.order_id) return;
+    setPayError(null);
+    setPayingLive(true);
+    try {
+      const order = await api.orderStatus(checkout.order_id);
+      if (!order.razorpay_order_id || !order.amount_paise || !order.razorpay_key_id) {
+        throw new Error("order is missing real-checkout details");
+      }
+      await loadRazorpayCheckout();
+      if (!window.Razorpay) throw new Error("Razorpay Checkout.js did not load");
+
+      await new Promise<void>((resolve, reject) => {
+        const rzp = new window.Razorpay!({
+          key: order.razorpay_key_id,
+          order_id: order.razorpay_order_id,
+          amount: order.amount_paise,
+          currency: "INR",
+          name: "PRAMAN",
+          description: `cart ${order.cart_id}`,
+          prefill: { contact: "9999999999", email: "checkout@praman.dev" },
+          theme: { color: "#141A22" },
+          handler: async (response: {
+            razorpay_order_id: string;
+            razorpay_payment_id: string;
+            razorpay_signature: string;
+          }) => {
+            try {
+              await api.checkoutConfirm(checkout.order_id!, response);
+              resolve();
+            } catch (err) {
+              reject(err instanceof Error ? err : new Error(String(err)));
+            }
+          },
+          modal: { ondismiss: () => reject(new Error("checkout dismissed")) },
+        });
+        rzp.open();
+      });
+
+      const status = await api.orderStatus(checkout.order_id);
+      setCheckout((prev) => (prev ? { ...prev, order_status: status.status } : prev));
+      setPostAction(
+        status.status === "captured"
+          ? "Real Razorpay payment captured."
+          : `Payment confirmed but order ended up in status: ${status.status}.`,
+      );
+    } catch (err) {
+      setPayError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPayingLive(false);
     }
   }
 
@@ -295,6 +379,30 @@ export default function LivePage() {
                   order {checkout.order_id} · {checkout.order_status}
                 </p>
               )}
+              {(checkout.order_status === "awaiting_payment" ||
+                checkout.order_status === "awaiting_payment_amber") &&
+                !postAction && (
+                  <div className="mt-2">
+                    <p className="text-xs text-ink-muted mb-1">
+                      Real Razorpay order created; S2S test-card capture isn&apos;t enabled on
+                      this account, so a real payment needs a real Checkout.js round-trip —
+                      use Razorpay&apos;s own test card{" "}
+                      <span className="font-mono">4111 1111 1111 1111</span>, any future
+                      expiry/CVV.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={payWithRazorpay}
+                      disabled={payingLive}
+                      className="border border-ink px-3 py-1.5 font-mono text-xs uppercase tracking-wide hover:bg-paper-raised disabled:opacity-40 transition-colors"
+                    >
+                      {payingLive ? "Opening Razorpay…" : "Pay with Razorpay (real)"}
+                    </button>
+                    {payError && (
+                      <p className="mt-1 text-xs text-band-red font-mono">{payError}</p>
+                    )}
+                  </div>
+                )}
               {checkout.decision === "ESCALATE" &&
                 checkout.order_status === "pending_approval" &&
                 !postAction && (

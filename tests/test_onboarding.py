@@ -1,4 +1,4 @@
-"""End-to-end walk through the onboarding state machine (CLAUDE.md Phase 3):
+"""End-to-end walk through the onboarding state machine (the design spec's Phase 3):
 NEW -> AWAITING_MEDIA -> EXTRACTING -> CONFIRMING_ITEMS -> SETTING_POLICY -> LIVE.
 """
 

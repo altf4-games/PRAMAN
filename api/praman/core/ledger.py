@@ -1,6 +1,6 @@
 """The hash-chained ledger. Every gate decision, onboarding step, quote,
 order transition, and cooling-off event is appended here — ALLOW included,
-per CLAUDE.md's non-negotiable rule that every gate decision persists.
+per the design spec's non-negotiable rule that every gate decision persists.
 
 `append_event` is the only way rows enter this table. Each row's
 `chain_hash` commits to the previous row's `chain_hash` and to this row's
@@ -30,7 +30,7 @@ GENESIS_HASH = "0" * 64
 
 
 # Per-session locks serialize append_event so chain order is deterministic
-# even under concurrent requests within this one process (CLAUDE.md's "one
+# even under concurrent requests within this one process (the design spec's "one
 # transaction, row-locked per session" — here achieved with an in-process
 # lock plus a strictly-increasing timestamp, which is sufficient for a
 # single-instance deployment).

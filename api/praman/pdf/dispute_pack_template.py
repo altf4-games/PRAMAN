@@ -2,7 +2,7 @@
 via WeasyPrint (`routes_dispute.py`'s `/pdf` route). Deliberately the same
 document, not a separate design: same tokens, same field order, same
 sections as `web/app/dispute/[orderId]/page.tsx`'s bahi-khata layout
-(CLAUDE.md §7) -- a merchant or a reviewer should recognise the PDF as the
+(the design spec §7) -- a merchant or a reviewer should recognise the PDF as the
 same artifact as the `/dispute/[orderId]` page, just paginated.
 """
 

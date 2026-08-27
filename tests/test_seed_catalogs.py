@@ -1,4 +1,4 @@
-"""Acceptance (CLAUDE.md Phase 2): both seed catalogs load, ~40 SKUs each,
+"""Acceptance (the design spec's Phase 2): both seed catalogs load, ~40 SKUs each,
 category-class diversity sufficient to eventually populate every
 reversibility band (Phase 5).
 """

@@ -1,4 +1,4 @@
-"""Phase 1 acceptance criteria (CLAUDE.md):
+"""Phase 1 acceptance criteria (the design spec):
 - chain verifies over 100 events
 - corrupting row 50 returns first_bad_index == 50
 """

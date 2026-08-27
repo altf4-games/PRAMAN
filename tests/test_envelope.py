@@ -1,4 +1,4 @@
-"""Acceptance (CLAUDE.md Phase 4): >=18 unit tests including exact
+"""Acceptance (the design spec's Phase 4): >=18 unit tests including exact
 boundaries (total == ceiling, == ceiling+1, envelope expiring mid-request,
 empty cart, duplicate SKUs), plus a hypothesis property test: no passing
 cart can ever push spent above ceiling.

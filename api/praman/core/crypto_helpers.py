@@ -11,7 +11,7 @@ from praman.models import CartMandate
 
 
 def cart_mandate_hash(cart: CartMandate) -> str:
-    """The hash embedded in a Razorpay order's `notes` (CLAUDE.md §6) —
+    """The hash embedded in a Razorpay order's `notes` (the design spec §6) —
     lets a dispute pack prove exactly which cart a given payment paid for,
     independent of Razorpay's own records."""
     return canonical_hash(

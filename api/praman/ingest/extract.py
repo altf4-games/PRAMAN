@@ -2,7 +2,7 @@
 merchant input (a photo, a scraped page, a CSV blob) into structured
 product data — via a live call to whatever `LLMClient` `get_llm_client()`
 resolves to. It does not normalise units or map category vocabulary; that's
-`normalise.py`'s job, deterministically. See CLAUDE.md §0/§2: the LLM
+`normalise.py`'s job, deterministically. See the design spec §0/§2: the LLM
 extracts, it is never load-bearing in the money path, and its output is
 never exposed to agents until it clears the confidence gate.
 """

@@ -1,4 +1,4 @@
-"""Builds the 200 harness sessions across CLAUDE.md §8's seven classes,
+"""Builds the 200 harness sessions across the design spec's §8 seven classes,
 drawing real SKUs from both committed seed catalogs so every session
 exercises the real Reversibility Ladder against real product data, not
 synthetic stand-ins.

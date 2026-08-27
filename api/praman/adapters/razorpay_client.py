@@ -7,7 +7,7 @@ real API is unavailable (rate limits, S2S not enabled on the test account,
 offline dev) or in unit tests. Money is always `int` paise.
 
 Non-negotiable: this module is I/O only. It contains no policy, no gate
-logic, no LLM calls — see CLAUDE.md §0.
+logic, no LLM calls — see the design spec §0.
 """
 
 from __future__ import annotations
@@ -84,6 +84,10 @@ class RazorpayClient(Protocol):
 
     def verify_webhook_signature(self, body: bytes, signature: str) -> bool: ...
 
+    def verify_payment_signature(
+        self, razorpay_order_id: str, razorpay_payment_id: str, razorpay_signature: str
+    ) -> bool: ...
+
     def drive_to_captured(self, order_id: str, amount_paise: int) -> RazorpayPayment: ...
 
     def refund_payment(self, payment_id: str, amount_paise: int) -> RazorpayRefund: ...
@@ -138,6 +142,26 @@ class RealRazorpayClient:
         try:
             self._client.utility.verify_webhook_signature(
                 body.decode(), signature, self._webhook_secret
+            )
+            return True
+        except razorpay.errors.SignatureVerificationError:
+            return False
+
+    def verify_payment_signature(
+        self, razorpay_order_id: str, razorpay_payment_id: str, razorpay_signature: str
+    ) -> bool:
+        """The signature Razorpay's Checkout.js hands back on the browser
+        success callback — HMAC-SHA256 of `order_id|payment_id` under the
+        key secret. Confirming this (server-side, never trusting the
+        browser callback alone) is what makes a Checkout.js completion a
+        genuine captured payment rather than a client claiming success."""
+        try:
+            self._client.utility.verify_payment_signature(
+                {
+                    "razorpay_order_id": razorpay_order_id,
+                    "razorpay_payment_id": razorpay_payment_id,
+                    "razorpay_signature": razorpay_signature,
+                }
             )
             return True
         except razorpay.errors.SignatureVerificationError:
@@ -247,6 +271,22 @@ class FakeRazorpayClient:
         expected = hmac.new(self._webhook_secret.encode(), body, hashlib.sha256).hexdigest()
         return hmac.compare_digest(expected, signature)
 
+    def verify_payment_signature(
+        self, razorpay_order_id: str, razorpay_payment_id: str, razorpay_signature: str
+    ) -> bool:
+        # Mirrors Razorpay's real formula (HMAC-SHA256 of "order_id|payment_id"
+        # under the key secret) so test code exercising the Checkout.js
+        # confirm path against this Fake client is exercising real logic.
+        payload = f"{razorpay_order_id}|{razorpay_payment_id}".encode()
+        expected = hmac.new(self._webhook_secret.encode(), payload, hashlib.sha256).hexdigest()
+        return hmac.compare_digest(expected, razorpay_signature)
+
+    def sign_payment(self, order_id: str, payment_id: str) -> str:
+        """Test helper mirroring `sign()` for webhooks — produces a valid
+        `verify_payment_signature` signature for (order_id, payment_id)."""
+        payload = f"{order_id}|{payment_id}".encode()
+        return hmac.new(self._webhook_secret.encode(), payload, hashlib.sha256).hexdigest()
+
     def sign(self, body: bytes) -> str:
         """Test helper: produce a valid signature for `body`, mirroring what
         Razorpay's webhook sender would compute."""
@@ -306,25 +346,44 @@ def get_razorpay_client(
 
 def create_and_capture_order(
     client: RazorpayClient, amount_paise: int, currency: str, receipt: str, notes: dict[str, str]
-) -> tuple[RazorpayOrder, RazorpayPayment, str]:
-    """The order-then-payment sequence checkout needs, with the same
-    real-then-fake fallback Phase 0's spike established. Returns
-    (order, payment, path_used) — 'real' or 'fake' — so the caller can
-    ledger which path actually ran, per CLAUDE.md's honesty rule (never
-    let a demo silently claim to be more real than it is).
+) -> tuple[RazorpayOrder, RazorpayPayment | None, str]:
+    """The order-then-payment sequence checkout needs. Returns
+    (order, payment, path_used) so the caller can ledger which path
+    actually ran, per the design spec's honesty rule (never let a demo
+    silently claim to be more real than it is). `payment` is `None` only
+    for `path == "pending_real_checkout"` — see below.
+
+    Three paths:
+      - 'real': `client` is real and Razorpay's server-to-server test-card
+        capture is enabled on this account — order and payment are both
+        genuinely captured through Razorpay's API in one shot.
+      - 'pending_real_checkout': `client` is real but S2S capture isn't
+        enabled (confirmed the default on a fresh Razorpay test account —
+        it's opt-in, granted only on request to Razorpay support). The
+        order itself is still real and visible in the Razorpay dashboard;
+        capturing a real payment against it needs a genuine Checkout.js
+        round-trip, which only a browser can drive. The caller leaves the
+        order in `awaiting_payment(_amber)` and the frontend completes it
+        via `routes_checkout.py`'s `/checkout/{order_id}/confirm` route.
+        This used to be silently papered over with a `FakeRazorpayClient`
+        capture reported under the real order's id — that made every
+        "real" checkout produce an order that could never show up as a
+        real Payment in the dashboard, which is exactly the gap this path
+        now surfaces honestly instead of hiding.
+      - 'fake': `client` is already a `FakeRazorpayClient` — used by
+        tests, the harness, and any deployment with `RAZORPAY_USE_FAKE=true`.
+        Captures synchronously and instantly, no browser involved.
 
     A real bug lived here until it was caught by the harness's cooling-off
-    cancellation simulation: the Fake fallback used to construct a *new*,
-    throwaway `FakeRazorpayClient()` instead of capturing through `client`
-    itself when `client` was already a `FakeRazorpayClient` (DEMO_MODE,
-    every test, and the harness all use one as the primary client, not
-    just as a fallback). A later `cancel_order` → `refund_payment` call
-    against the *original* client then couldn't find the payment — it was
-    created in an instance nobody kept a reference to — and silently
-    failed, while `cancel_order` still marked the order `refunded_at`
-    regardless. Fixed by capturing through `client` directly whenever it's
-    already Fake, so the payment a later refund looks for is the one that
-    actually exists.
+    cancellation simulation: capturing through a *new*, throwaway
+    `FakeRazorpayClient()` instead of through `client` itself when `client`
+    was already a `FakeRazorpayClient` meant a later `cancel_order` →
+    `refund_payment` call against the *original* client couldn't find the
+    payment — it was created in an instance nobody kept a reference to —
+    and silently failed, while `cancel_order` still marked the order
+    `refunded_at` regardless. Fixed by capturing through `client` directly
+    whenever it's already Fake, so the payment a later refund looks for is
+    the one that actually exists.
     """
     order = client.create_order(amount_paise, currency, receipt, notes)
 
@@ -333,20 +392,9 @@ def create_and_capture_order(
             payment = client.drive_to_captured(order.order_id, amount_paise)
             return order, payment, "real"
         except S2SUnavailableError:
-            pass  # fall through to the Fake path below, same as Phase 0
-        # S2S unavailable: the payment this produces was never real to
-        # begin with, so a later refund against the real Razorpay API
-        # cannot succeed for it regardless of which Fake instance
-        # captures it — disclosed in README's "what's real vs mocked".
-        fake = FakeRazorpayClient()
-        fake_order = fake.create_order(amount_paise, currency, receipt, notes)
-        payment = fake.simulate_payment(fake_order.order_id)
-        # Report under the REAL order's id — that's the order of record
-        # (the one whose notes carry the cart_mandate_hash and that
-        # webhooks/the ledger reference), even though capture itself used
-        # the Fake path.
-        payment = replace(payment, order_id=order.order_id)
-        return order, payment, "fake"
+            # Real order, no automated capture available — the caller
+            # must complete a real Checkout.js round-trip. See docstring.
+            return order, None, "pending_real_checkout"
 
     # `client` is already a FakeRazorpayClient — capture through it
     # directly so its own `_payments` dict actually holds this payment for

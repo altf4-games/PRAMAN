@@ -205,6 +205,26 @@ class OrderOut(BaseModel):
     dispatched_at: str | None
     cancelled_at: str | None
     refunded_at: str | None
+    # Populated only when `status` is "awaiting_payment"/"awaiting_payment_amber"
+    # — everything the frontend needs to open Razorpay's real Checkout.js
+    # widget without a second round-trip. `razorpay_key_id` is the
+    # publishable key id, safe to expose client-side (it's what
+    # Checkout.js itself requires).
+    amount_paise: int | None = None
+    razorpay_key_id: str | None = None
+
+
+class CheckoutConfirmIn(BaseModel):
+    razorpay_order_id: str
+    razorpay_payment_id: str
+    razorpay_signature: str
+
+
+class CheckoutConfirmOut(BaseModel):
+    order_id: str
+    status: str
+    dispatched_at: str | None
+    cooling_off_until: str | None
 
 
 class OrderUndoIn(BaseModel):
@@ -216,7 +236,7 @@ class OrderUndoOut(BaseModel):
 
 
 # --- merchants (frontend plumbing — the /onboard and /live pages need a
-# merchant picker; not one of CLAUDE.md's ten MCP tools) ---
+# merchant picker; not one of the design spec's ten MCP tools) ---
 
 
 class MerchantOut(BaseModel):

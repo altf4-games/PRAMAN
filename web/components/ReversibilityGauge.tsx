@@ -27,7 +27,7 @@ export interface ReversibilityGaugeProps {
 }
 
 /**
- * The signature element (CLAUDE.md §7): a horizontal meter, 0→1, with the
+ * The signature element (the design spec §7): a horizontal meter, 0→1, with the
  * five reversibility factors as stacked, labelled segments. Crossing below
  * the green threshold stamps a bordered mono seal onto the gauge reading
  * "{BAND} · {WHAT HAPPENS}" — the single most memorable frame in the demo

@@ -6,7 +6,7 @@ one-line change at `get_llm_client()`.
 Non-negotiable: nothing in `core/gate.py`, `core/envelope.py`, or
 `core/reversibility.py` may import this module. LLM calls are confined to
 catalog extraction (offline/inbound ingest) and substitution ranking
-(post-filter, non-load-bearing) — see CLAUDE.md §0.
+(post-filter, non-load-bearing) — see the design spec §0.
 """
 
 from __future__ import annotations

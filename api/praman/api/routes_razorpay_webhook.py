@@ -1,10 +1,12 @@
 """Razorpay webhook — `POST /webhooks/razorpay`. Verifies the webhook
 signature (HMAC-SHA256 over the raw body with `RAZORPAY_WEBHOOK_SECRET`)
 before touching the payload at all, then reconciles the event into the
-ledger. This build's money path already captures/refunds synchronously
-(`core/checkout.py`, `core/checkout.py::cancel_order`) rather than waiting
-on this webhook, so its job here is reconciliation and audit, not driving
-state — an order's status is never *first* set by this handler.
+ledger. Most of this build's money path captures/refunds synchronously
+(`core/checkout.py`, `core/checkout.py::cancel_order`); the one exception
+is a real order awaiting a genuine Checkout.js payment
+(`core/checkout.py::confirm_real_payment`), which drives state from the
+browser's own signed callback rather than this webhook — so its job here
+stays reconciliation and audit, not driving state either way.
 """
 
 from __future__ import annotations

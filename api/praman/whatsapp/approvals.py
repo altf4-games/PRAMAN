@@ -12,7 +12,7 @@ WhatsApp Approve/Decline (via `send_approval_request` below, called from
 - Timeout (`sweep_expired_approvals`, called by the scheduler): denies
   anything still pending past `MERCHANT_APPROVAL_TIMEOUT_S`.
 
-Every transition ledgers (CLAUDE.md §6).
+Every transition ledgers (the design spec §6).
 """
 
 from __future__ import annotations
@@ -68,7 +68,7 @@ async def find_pending_approval_order(session: AsyncSession, merchant: Merchant)
 
 
 async def list_pending_approvals(session: AsyncSession, merchant_id: str) -> list[Order]:
-    """The full inbox (CLAUDE.md §7's `/approvals` page), as opposed to
+    """The full inbox (the design spec's §7 `/approvals` page), as opposed to
     `find_pending_approval_order`'s "most recent one" used by the WhatsApp
     reply handler, which only ever needs to act on a single message."""
     result = await session.execute(
@@ -252,7 +252,7 @@ async def _approve(
 async def sweep_expired_approvals(
     session: AsyncSession, whatsapp: WhatsAppClient, now: datetime
 ) -> int:
-    """Called by the scheduler sweep (CLAUDE.md §6: 'Timeout (default 15
+    """Called by the scheduler sweep (the design spec §6: 'Timeout (default 15
     min) -> deny'). Returns how many orders were denied."""
     result = await session.execute(select(Order).where(Order.status == "pending_approval"))
     pending = result.scalars().all()

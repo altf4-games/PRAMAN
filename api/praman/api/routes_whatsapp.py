@@ -3,7 +3,7 @@
 Verifies the Twilio signature, persists the message, and routes it via
 `whatsapp/dispatch.py`'s shared merchant-approval → buyer-cancel →
 onboarding logic (identical to `api/routes_telegram.py`'s, factored out so
-the two channels can't drift). Prompt-injection note (CLAUDE.md §8):
+the two channels can't drift). Prompt-injection note (the design spec §8):
 whatever a vendor sends here — including any text embedded in a
 photographed price list — only ever reaches `ingest/extract.py`'s LLM call
 or the deterministic state machine's plain-text matching. It never reaches

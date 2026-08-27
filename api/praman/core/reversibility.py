@@ -1,4 +1,4 @@
-"""The Reversibility Ladder (CLAUDE.md §5): autonomy scales inversely with
+"""The Reversibility Ladder (the design spec §5): autonomy scales inversely with
 how hard a purchase is to undo. `reversibility_score_detailed` is
 deterministic, explainable, and pure — the same five weighted factors,
 computed the same way, every time. It is never tuned after looking at

@@ -5,7 +5,7 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Design tokens — CLAUDE.md §7. Ink on paper. The reversibility band
+ * Design tokens — the design spec §7. Ink on paper. The reversibility band
  * (green/amber/red) is the ONLY saturated colour in the product; everything
  * else here is greyscale ink/paper. Mirrored in lib/tokens.ts for the one
  * place (ReversibilityGauge's SVG) that needs literal colour strings rather
@@ -60,7 +60,7 @@
   --color-input: var(--rule);
   --color-ring: var(--ink-muted);
 
-  /* Dense, aligned, hairline — CLAUDE.md's "zero-to-2px radius" rule. */
+  /* Dense, aligned, hairline — the design spec's "zero-to-2px radius" rule. */
   --radius-sm: 0px;
   --radius-md: 2px;
   --radius-lg: 2px;
@@ -89,7 +89,7 @@
   }
 }
 
-/* ReversibilityGauge's band-seal stamp — CLAUDE.md §7: "the single most
+/* ReversibilityGauge's band-seal stamp — the design spec §7: "the single most
    memorable frame in your video." A rubber-stamp thump: overshoot past
    its resting rotation, settle back, brief ink-bloom on the ring. */
 @keyframes gauge-stamp {
@@ -128,7 +128,7 @@
   transform-origin: left;
 }
 
-/* CLAUDE.md's motion rule: restrained, one orchestrated moment, respect
+/* the design spec's motion rule: restrained, one orchestrated moment, respect
    the OS setting rather than assuming everyone wants animation off. */
 @media (prefers-reduced-motion: reduce) {
   *,

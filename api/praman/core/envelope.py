@@ -4,7 +4,7 @@ AP2 vocabulary ("envelope", "mandate") is kept in code so interop with that
 ecosystem stays legible, but the actual semantics follow Indian rails.
 
 `verify_cart_within_envelope` is the most important function in the repo
-(CLAUDE.md §4): pure, no I/O, no exceptions for control flow, `now`
+(the design spec §4): pure, no I/O, no exceptions for control flow, `now`
 injected. It operates on the plain dataclasses below rather than the
 SQLAlchemy `IntentEnvelope`/`CartMandate` rows directly, so it's trivially
 unit-testable without a database — `envelope_from_row` / `cart_from_mandate`
@@ -55,7 +55,7 @@ class Envelope:
 
 
 def verify_cart_within_envelope(cart: Cart, env: Envelope, now: datetime) -> GateResult:
-    """Ordered; first failure wins. See CLAUDE.md §4 for the exact rule
+    """Ordered; first failure wins. See the design spec §4 for the exact rule
     order — R04's own internal ordering, checked before R05 onward in the
     full gate (Phase 5)."""
     if env.revoked_at is not None:

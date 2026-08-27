@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 /**
  * Live counts from this deployment — NOT the Phase 9 harness's Arm A vs
  * Arm B comparison (`RESULTS.md`, not yet run). Honesty matters more here
- * than looking impressive: CLAUDE.md §8 is explicit that a tuned-looking
+ * than looking impressive: the design spec §8 is explicit that a tuned-looking
  * number discredits the whole submission, so this page only ever shows
  * what actually happened, never a benchmark claim it hasn't earned.
  */

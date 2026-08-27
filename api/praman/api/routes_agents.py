@@ -1,4 +1,4 @@
-"""Agent registration. Not one of the spec's MCP tools (CLAUDE.md §6 lists
+"""Agent registration. Not one of the spec's MCP tools (the design spec §6 lists
 `catalog_search`/`catalog_get`/`policy_get`/`quote_request`/
 `envelope_submit`/`cart_confirm`/`checkout_execute`/`order_status`/
 `substitution_accept`/`order_undo` — no registration tool), so this stays

@@ -1,5 +1,5 @@
 """`/api/approvals` — the REST mirror of the merchant WhatsApp inbox
-(CLAUDE.md §7: "Actions here and on WhatsApp stay in sync"). Listing reads
+(the design spec §7: "Actions here and on WhatsApp stay in sync"). Listing reads
 straight from `Order`/`CartMandate`; deciding calls the exact same
 `_approve`/`_decline` logic `whatsapp/approvals.py`'s reply handler uses
 (via `decide_by_order_id`), so a click here and a WhatsApp reply can never

@@ -1,5 +1,5 @@
 /**
- * Design tokens — CLAUDE.md §7, mirrored from app/globals.css. This file
+ * Design tokens — the design spec §7, mirrored from app/globals.css. This file
  * exists because one place in the product (ReversibilityGauge's SVG fills/
  * strokes) needs literal colour strings rather than a Tailwind class name;
  * everywhere else should reach for the Tailwind utilities (bg-paper,
@@ -37,7 +37,7 @@ export const bandLabel: Record<Band, string> = {
   red: "RED · STEP-UP REQUIRED",
 };
 
-// CLAUDE.md §5 — named constants, never inline literals, mirrored from the
+// the design spec §5 — named constants, never inline literals, mirrored from the
 // API's own praman/config.py so the frontend's copy of the thresholds can
 // never silently drift from what the gate actually enforces.
 export const BAND_GREEN_THRESHOLD = 0.75;

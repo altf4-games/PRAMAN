@@ -155,6 +155,15 @@ export interface OrderOut {
   dispatched_at: string | null;
   cancelled_at: string | null;
   refunded_at: string | null;
+  amount_paise: number | null;
+  razorpay_key_id: string | null;
+}
+
+export interface CheckoutConfirmOut {
+  order_id: string;
+  status: string;
+  dispatched_at: string | null;
+  cooling_off_until: string | null;
 }
 
 export interface ApprovalOut {
@@ -255,6 +264,14 @@ export const api = {
     request<{ cancelled: boolean }>(`/api/orders/${orderId}/undo`, {
       method: "POST",
       body: JSON.stringify({ user_ref: userRef }),
+    }),
+  checkoutConfirm: (
+    orderId: string,
+    body: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string },
+  ) =>
+    request<CheckoutConfirmOut>(`/api/checkout/${orderId}/confirm`, {
+      method: "POST",
+      body: JSON.stringify(body),
     }),
 
   approvalsInbox: (merchantId: string) =>

@@ -1,4 +1,4 @@
-"""Acceptance (CLAUDE.md Phase 5): one test per rule firing in isolation;
+"""Acceptance (the design spec's Phase 5): one test per rule firing in isolation;
 an ordering test proving R04 precedes R08; a fail-closed test injecting an
 exception mid-chain.
 """

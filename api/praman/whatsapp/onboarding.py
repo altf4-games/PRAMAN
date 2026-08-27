@@ -1,4 +1,4 @@
-"""Vendor onboarding state machine (CLAUDE.md §Phase 3):
+"""Vendor onboarding state machine (the design spec's Phase 3):
 
     NEW -> AWAITING_MEDIA -> EXTRACTING -> CONFIRMING_ITEMS -> SETTING_POLICY -> LIVE
 

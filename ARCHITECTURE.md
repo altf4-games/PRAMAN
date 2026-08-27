@@ -23,6 +23,12 @@ isn't working in 2 hours, ship on Fake, declare it in the README, move on."
 Order creation and webhook-signature verification both run against the real
 API/verification code; only the "produce a captured payment" step is faked.
 
+**Superseded (see Phase 6, part 3 below):** the Fake fallback described
+here was later replaced with a real Checkout.js round-trip, once it became
+clear that fabricating a fake payment under a real order's id meant no
+checkout in this build could ever produce a genuine Payment visible in the
+Razorpay dashboard — a real observable gap, not just a documentation one.
+
 ## Phase 1 — Foundation
 
 **Decision:** managed infra deviates from the spec's Railway-for-everything
@@ -189,7 +195,7 @@ number defaulted to the classic Sandbox number `+14155238886` instead of
 this trial's assigned number) and observing the same error persist.
 
 Conclusion: the classic, long-lived Twilio "WhatsApp Sandbox" (what
-CLAUDE.md's stack table names) allows freeform sandbox replies without
+the design spec's stack table names) allows freeform sandbox replies without
 templates; this newer self-service "Twilio Console trial" flow — what
 `console.twilio.com`'s current WhatsApp onboarding actually creates for a
 new signup — does not, until the account is upgraded with a payment method.
@@ -259,7 +265,7 @@ valid, so a nonce must stay rejected-as-replay across that full ~120s
 window from either side, not just 60s from when it was first seen.
 
 **Decision:** `LocalRegistry.is_revoked` returns `True` for an agent the
-registry has never heard of, not `False`. Fail-closed per CLAUDE.md §0: an
+registry has never heard of, not `False`. Fail-closed per the design spec §0: an
 unknown agent is untrusted, not innocent-until-proven-revoked.
 `verify_agent_request` folds "unknown" and "revoked" into the same
 `AGENT_REVOKED` reason code (R02) since the caller's remedy is identical
@@ -386,6 +392,53 @@ which path actually ran). Checkout always goes through this helper rather
 than calling `create_order`/`capture_payment` separately, so the fallback
 logic lives in exactly one place.
 
+### Phase 6, part 3 — a real Checkout.js path, replacing the silent Fake fallback
+
+**Decision (a real gap found from a live user report, not a design
+review):** `create_and_capture_order`'s S2S-unavailable fallback used to
+construct a throwaway `FakeRazorpayClient`, capture a fake payment against
+it, and report that payment under the *real* order's id — every "real"
+checkout on this account therefore always produced an order that could
+never show up as a real Payment in the Razorpay test dashboard. This was
+caught because it manifested as an observable symptom ("transactions don't
+appear in Razorpay dashboard"), not because it was flagged in review.
+
+**Fix:** `create_and_capture_order` now returns a third path,
+`"pending_real_checkout"`, whenever `client` is real and S2S capture is
+unavailable — `payment` is `None`, and the order (genuinely created via
+Razorpay's real API) is left in `awaiting_payment`/`awaiting_payment_amber`
+rather than silently marked captured. `core/checkout.py::confirm_real_payment`
+is the second half: it verifies a Razorpay Checkout.js browser callback's
+signature server-side (`RazorpayClient.verify_payment_signature` — HMAC of
+`order_id|payment_id` under the key secret, the same scheme Razorpay's own
+widget produces), re-confirms the payment is actually `captured` via
+`fetch_payment` (capturing it explicitly if it only shows `authorized`),
+and only then applies whatever the original gate decision was — immediate
+dispatch for green, the start of the cooling-off window for amber. The
+`/live` frontend (`payWithRazorpay` in `web/app/live/page.tsx`) loads
+Razorpay's actual `checkout.js` and opens it with the real order id, amount,
+and publishable key id (`GET /api/orders/{id}` now returns
+`amount_paise`/`razorpay_key_id` only when a real payment is still pending);
+on the widget's success callback it posts to the new
+`POST /api/checkout/{order_id}/confirm` route, which is the only thing
+that ever changes the order's status — the widget's own claimed success is
+never trusted on its own.
+
+**Why not make S2S work instead:** confirmed directly against the live key
+(`POST /v1/payments/create/json` → `404`) — it is genuinely disabled on
+this account and only enabled by Razorpay support on request, not
+something more code can route around. A browser is architecturally
+required to produce a real captured payment without it; the earlier
+"silently fake it" behavior was a design bug this fix corrects, not
+something the new code compensates for.
+
+**Tradeoff accepted:** an order that needs Checkout.js can no longer
+dispatch or start cooling-off the instant the gate ALLOWs/HOLDs it — it
+waits on a human at a browser completing a real card form. `FakeRazorpayClient`
+(every test, the harness, and any `RAZORPAY_USE_FAKE=true` deployment)
+is unaffected and still captures synchronously with no browser involved,
+so this only touches the live deployed API's real-money path.
+
 **Decision:** substitution's deterministic filter computes each
 candidate's reversibility band using the *same* `reversibility_score_detailed`
 function as the real gate (via a single-item cart against the real
@@ -429,7 +482,7 @@ feedback on an obviously-doomed cart (wrong envelope, disallowed category)
 before it ever commits to a second signed call.
 
 **Decision:** agent registration (`POST /api/agents/register`) is not one
-of CLAUDE.md §6's ten MCP tools, so it's REST-only and never wrapped into
+of the design spec's §6 ten MCP tools, so it's REST-only and never wrapped into
 `mcp/server.py`. It exists because something has to create the `agents`
 rows the rest of the surface assumes — a real deployment would register an
 agent out-of-band (or via NPCI's future UAP). Supplying your own
@@ -461,7 +514,7 @@ too.
 **Decision:** the FastMCP app (`mcp/server.py`) wraps the REST routes over
 real HTTP (`httpx.AsyncClient` against `settings.public_base_url`) rather
 than calling route handlers as Python functions directly — "thin wrappers
-over the REST routes" per CLAUDE.md §6 means genuinely going through the
+over the REST routes" per the design spec §6 means genuinely going through the
 same HTTP surface an external caller would, not a shortcut that only looks
 like one. `mcp.http_app(path="/mcp")` already serves at its own internal
 `/mcp` path; mounting it a second time at `/mcp` in `main.py` produced
@@ -479,7 +532,7 @@ signature before touching the payload at all, exactly like the inbound
 Twilio webhook does.
 
 **Finding from local testing (not fixed — left for Phase 9's harness to
-measure honestly, per CLAUDE.md's "never tune after seeing results"
+measure honestly, per the design spec's "never tune after seeing results"
 rule):** no SKU in either committed seed catalog can score `green` under
 `reversibility_score_detailed`, and no grocery SKU ever can, structurally.
 Grocery items are `perishable`/`consumable` with `return_window_days` 0-2
@@ -556,14 +609,14 @@ that actually matters for the deployed app, and `railway`/`curl` calls
 ## Phase 7 — Frontend
 
 **Stack substitution:** `create-next-app`'s current latest is Next.js
-16.3.3 / React 19.2, not the "Next.js 15" CLAUDE.md names — the spec was
+16.3.3 / React 19.2, not the "Next.js 15" the design spec names — the spec was
 written against whatever was current at the time; there is no reason to
 pin an older major deliberately. Tailwind v4 (CSS-first `@theme`, no
 `tailwind.config.js`) came along with it, which changes *where* the
 design tokens live (`app/globals.css`'s `@theme inline` block) but not
 what they are.
 
-**Decision:** the design tokens (CLAUDE.md §7's colour/type table) are
+**Decision:** the design tokens (the design spec's §7 colour/type table) are
 defined in exactly two places kept in sync by hand — CSS custom properties
 in `app/globals.css` (which Tailwind's `@theme` turns into utility classes
 like `bg-paper`/`text-band-green`) and a mirrored `lib/tokens.ts` object.
@@ -574,10 +627,10 @@ one component wasn't worth the indirection. `lib/tokens.ts`'s own comment
 says as much and tells future edits to keep both in sync.
 
 **Decision:** this is a single deliberate palette ("ink on paper"), not a
-light/dark pair. CLAUDE.md never asked for a dark mode, and the artifact
-platform's usual dark-mode-awareness requirement is specific to Artifacts
-rendered inside Claude's own viewer — this is a normal deployed Next.js
-site, so that constraint doesn't apply here.
+light/dark pair. The design spec never asked for a dark mode, and
+dark-mode-awareness requirements are specific to embedded, sandboxed
+preview surfaces — this is a normal deployed Next.js site, so that
+constraint doesn't apply here.
 
 **Decision (a real design bug, caught before it shipped):** the first
 version of `useLedgerStream` (`lib/sse.ts`) used the browser's native
@@ -607,7 +660,7 @@ the frame search.
 is no REST route for actually confirming or correcting a low-confidence
 product — that logic lives only inside the WhatsApp state machine's
 plain-text matching (`whatsapp/onboarding.py::_handle_confirming_items`).
-Per CLAUDE.md's own cut order ("/catalog and /metrics pages → /live and
+Per the design spec's own cut order ("/catalog and /metrics pages → /live and
 /approvals carry the demo"), building a second, REST-only confirmation
 flow that duplicates WhatsApp's wasn't worth it; the page stays an honest,
 labelled read-only mirror instead of a broken-looking interactive one.
@@ -625,7 +678,7 @@ rather than implying otherwise), and `GET/POST /api/merchants`,
 UIs and the approvals inbox. `/api/approvals/{id}/decide` reuses
 `whatsapp/approvals.py`'s exact `_approve`/`_decline` functions via a new
 `decide_by_order_id`, so a click in the frontend and a WhatsApp reply can
-never produce different outcomes for the same order — CLAUDE.md §7's
+never produce different outcomes for the same order — the design spec's §7
 explicit requirement.
 
 **Decision:** `/live` signs its own agent requests in the browser

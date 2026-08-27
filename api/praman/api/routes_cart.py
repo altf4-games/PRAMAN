@@ -1,4 +1,4 @@
-"""`cart_confirm` (CLAUDE.md §6). Builds and persists a `CartMandate` from a
+"""`cart_confirm` (the design spec §6). Builds and persists a `CartMandate` from a
 set of already-issued, merchant-signed quotes. Requires the agent's
 signature over the request (the same auth `checkout_execute` will require
 again on the *next* call — `cart_confirm` doesn't run the money-path gate,

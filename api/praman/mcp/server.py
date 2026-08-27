@@ -1,4 +1,4 @@
-"""MCP surface — thin wrappers over the REST routes (CLAUDE.md §6: "Build
+"""MCP surface — thin wrappers over the REST routes (the design spec §6: "Build
 REST first, wrap second"). Every tool here does nothing but forward its
 arguments to the matching REST endpoint over HTTP and return the JSON
 response; none of them touch the database, the gate, or any adapter

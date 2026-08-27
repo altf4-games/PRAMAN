@@ -1,5 +1,5 @@
 """Prompt-injection strings — appended to a product's `name` field for the
-`prompt_injection` session category. CLAUDE.md §8's threat model: catalog
+`prompt_injection` session category. the design spec's §8 threat model: catalog
 text is data, never instruction. `core/gate.py` never reads free text (it
 reads `category_class`, `is_personalised`, prices, quantities — all
 structured fields the injected string never touches), so the assertion

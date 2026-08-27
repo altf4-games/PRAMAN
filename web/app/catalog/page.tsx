@@ -7,7 +7,7 @@ import { api, type MerchantOut, type ReviewProductOut } from "@/lib/api";
  * The confidence review queue. Read-only: there's no REST endpoint yet for
  * actually confirming/correcting a product (that logic only exists inside
  * the WhatsApp state machine's plain-text matching,
- * `whatsapp/onboarding.py::_handle_confirming_items`) — per CLAUDE.md's own
+ * `whatsapp/onboarding.py::_handle_confirming_items`) — per the design spec's own
  * cut order, this page carries less of the demo than `/live` and
  * `/approvals`, so it stays a view rather than a second, REST-only
  * confirmation flow duplicating WhatsApp's.
@@ -44,7 +44,7 @@ export default function CatalogPage() {
       <p className="text-ink-muted max-w-2xl mb-6">
         Every product a low-confidence extraction flagged for a merchant to confirm — never
         exposed to a shopping agent until it&apos;s cleared. Confirming happens over WhatsApp
-        (CLAUDE.md&apos;s onboarding flow); this page mirrors the queue read-only.
+        (the design spec&apos;s onboarding flow); this page mirrors the queue read-only.
       </p>
 
       <div className="mb-6">

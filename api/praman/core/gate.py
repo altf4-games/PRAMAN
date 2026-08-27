@@ -1,5 +1,5 @@
 """The Policy Gate — R01 through R12, in order, first non-ALLOW wins.
-Every gate decision persists, ALLOW included (CLAUDE.md's non-negotiable
+Every gate decision persists, ALLOW included (the design spec's non-negotiable
 rule), and the whole body runs fail-closed: any unhandled exception is
 caught, logged, and reported as a BLOCK, never silently swallowed into an
 ALLOW.

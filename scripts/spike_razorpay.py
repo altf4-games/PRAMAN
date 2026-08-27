@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Phase 0 spike (CLAUDE.md §4). Timeboxed to 2 hours.
+"""Phase 0 spike (the design spec §4). Timeboxed to 2 hours.
 
 Proves out the Razorpay TEST MODE integration end to end:
   1. Create a test-mode order via `RealRazorpayClient`.
@@ -10,7 +10,7 @@ Proves out the Razorpay TEST MODE integration end to end:
      (`RealRazorpayClient.verify_webhook_signature`), against a payload
      signed the same way Razorpay signs webhook deliveries.
 
-Per CLAUDE.md: "If the real path isn't working in 2 hours, ship on Fake,
+Per the design spec: "If the real path isn't working in 2 hours, ship on Fake,
 declare it in the README, move on." This script reports which path it took
 for each step so that declaration is easy to write honestly.
 """
@@ -115,7 +115,9 @@ def main() -> None:
     path_used = "real"
     if payment_id is None:
         print("    S2S path unavailable on this test account (expected — S2S is opt-in).")
-        print("    Falling back to FakeRazorpayClient.simulate_payment per CLAUDE.md §4 rule.")
+        print(
+            "    Falling back to FakeRazorpayClient.simulate_payment per the design spec §4 rule."
+        )
         fake = FakeRazorpayClient(webhook_secret=webhook_secret)
         fake_order = fake.create_order(order.amount_paise, "INR", order.receipt or "", order.notes)
         payment = fake.simulate_payment(fake_order.order_id)

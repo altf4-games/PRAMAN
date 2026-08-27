@@ -1,5 +1,5 @@
 """`harness/report.py` turns a flat list of `SessionResult`s into the
-metrics CLAUDE.md §8 requires. These use hand-built `SessionResult`s
+metrics the design spec §8 requires. These use hand-built `SessionResult`s
 instead of a real run so each aggregation rule is tested in isolation."""
 
 from __future__ import annotations

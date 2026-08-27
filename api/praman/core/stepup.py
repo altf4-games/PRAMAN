@@ -1,6 +1,6 @@
 """Step-up: when the gate ESCALATEs (R08 or R11), a merchant gets a
 WhatsApp Approve/Decline. `stepup_token` binds that WhatsApp reply back to
-the specific order it approves — CLAUDE.md §8's threat model entry
+the specific order it approves — the design spec's §8 threat model entry
 "WhatsApp approval spoofing": a Twilio-signature-verified message from the
 merchant's own registered number, containing this single-use token, is
 what authorizes the re-run — not the message text alone.

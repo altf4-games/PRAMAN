@@ -1,4 +1,4 @@
-"""`quote_request` (CLAUDE.md §6, `idempotentHint: true`). Requires the
+"""`quote_request` (the design spec §6, `idempotentHint: true`). Requires the
 requesting agent's Ed25519 signature (R01/R02 territory, via
 `verify_agent_request`) since issuing a quote commits the merchant to a
 soft stock hold — an unauthenticated caller shouldn't be able to churn a

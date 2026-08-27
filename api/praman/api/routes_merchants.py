@@ -1,5 +1,5 @@
 """Merchant listing — frontend plumbing (`/onboard`'s and `/live`'s
-merchant picker), not one of CLAUDE.md's ten MCP tools, so REST-only.
+merchant picker), not one of the design spec's ten MCP tools, so REST-only.
 """
 
 from __future__ import annotations

@@ -16,7 +16,7 @@ Decision = Literal["ALLOW", "BLOCK", "HOLD", "ESCALATE", "SUBSTITUTE"]
 @dataclass(frozen=True, slots=True)
 class GateResult:
     """Every rejection carries a reason_code, detail, and remedy —
-    CLAUDE.md's non-negotiable rule, enforced by this being the only
+    the design spec's non-negotiable rule, enforced by this being the only
     result shape any gate-adjacent function returns."""
 
     decision: Decision

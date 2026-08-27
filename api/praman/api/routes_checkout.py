@@ -23,7 +23,7 @@ from praman.api.deps import (
     WhatsAppDep,
 )
 from praman.config import get_settings
-from praman.core.checkout import cancel_order, execute_checkout
+from praman.core.checkout import cancel_order, confirm_real_payment, execute_checkout
 from praman.core.envelope import Cart, CartItem
 from praman.core.gate import GateRequest
 from praman.core.quotes import QuoteData
@@ -31,6 +31,8 @@ from praman.core.registry import verify_agent_request
 from praman.core.reversibility import ReversibilityItem
 from praman.models import CartMandate, IntentEnvelope, Order, Product
 from praman.schemas import (
+    CheckoutConfirmIn,
+    CheckoutConfirmOut,
     CheckoutExecuteIn,
     CheckoutExecuteOut,
     OrderOut,
@@ -239,6 +241,17 @@ async def order_status(session: DbSession, order_id: str) -> OrderOut:
     order = result.scalar_one_or_none()
     if order is None:
         raise HTTPException(status_code=404, detail="order not found")
+
+    amount_paise: int | None = None
+    razorpay_key_id: str | None = None
+    if order.status in ("awaiting_payment", "awaiting_payment_amber"):
+        cart_result = await session.execute(
+            select(CartMandate).where(CartMandate.cart_id == order.cart_id)
+        )
+        cart = cart_result.scalar_one_or_none()
+        amount_paise = cart.total_paise if cart is not None else None
+        razorpay_key_id = get_settings().razorpay_key_id
+
     return OrderOut(
         id=order.id,
         cart_id=order.cart_id,
@@ -248,6 +261,56 @@ async def order_status(session: DbSession, order_id: str) -> OrderOut:
         dispatched_at=order.dispatched_at.isoformat() if order.dispatched_at else None,
         cancelled_at=order.cancelled_at.isoformat() if order.cancelled_at else None,
         refunded_at=order.refunded_at.isoformat() if order.refunded_at else None,
+        amount_paise=amount_paise,
+        razorpay_key_id=razorpay_key_id,
+    )
+
+
+@router.post("/checkout/{order_id}/confirm")
+async def checkout_confirm(
+    session: DbSession,
+    order_id: str,
+    body: CheckoutConfirmIn,
+    razorpay: RazorpayDep,
+    whatsapp: WhatsAppDep,
+) -> CheckoutConfirmOut:
+    """Completes a real Razorpay Checkout.js round-trip for an order left
+    `awaiting_payment(_amber)` by `checkout_execute` (see
+    `core/checkout.py::confirm_real_payment` and
+    `adapters/razorpay_client.py::create_and_capture_order`'s docstrings
+    for why this second step exists at all — S2S test-card capture isn't
+    enabled on this Razorpay test account, so a genuine payment needs a
+    browser to actually drive it).
+    """
+    result = await session.execute(select(Order).where(Order.id == order_id))
+    order = result.scalar_one_or_none()
+    if order is None:
+        raise HTTPException(status_code=404, detail="order not found")
+    if order.razorpay_order_id != body.razorpay_order_id:
+        raise HTTPException(status_code=400, detail="razorpay_order_id does not match this order")
+
+    settings = get_settings()
+    try:
+        confirmed = await confirm_real_payment(
+            session,
+            razorpay,
+            whatsapp,
+            order,
+            razorpay_payment_id=body.razorpay_payment_id,
+            razorpay_signature=body.razorpay_signature,
+            now=datetime.now(UTC),
+            demo_mode=settings.demo_mode,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return CheckoutConfirmOut(
+        order_id=confirmed.id,
+        status=confirmed.status,
+        dispatched_at=confirmed.dispatched_at.isoformat() if confirmed.dispatched_at else None,
+        cooling_off_until=confirmed.cooling_off_until.isoformat()
+        if confirmed.cooling_off_until
+        else None,
     )
 
 
