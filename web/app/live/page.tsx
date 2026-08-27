@@ -159,18 +159,31 @@ export default function LivePage() {
 
   async function approveAsMerchant() {
     if (!checkout?.order_id) return;
-    await api.approvalsDecide(checkout.order_id, "approve");
+    const decision = await api.approvalsDecide(checkout.order_id, "approve");
     const status = await api.orderStatus(checkout.order_id);
     setCheckout((prev) => (prev ? { ...prev, order_status: status.status } : prev));
-    setPostAction("Merchant approved — order captured.");
+    setPostAction(
+      status.status === "captured"
+        ? "Merchant approved — order captured."
+        : `Approved, but the order didn't end up captured (status: ${decision.order_status}).`,
+    );
   }
 
   async function undoAsBuyer() {
     if (!checkout?.order_id) return;
-    await api.orderUndo(checkout.order_id, userRef);
+    // A HOLD order in DEMO_MODE dispatches automatically 60s after
+    // capture — a real race the UI must reflect honestly rather than
+    // claiming success regardless (a bug found live: this used to always
+    // show "cancelled" even when the order had already dispatched and
+    // the cancel silently no-op'd).
+    const result = await api.orderUndo(checkout.order_id, userRef);
     const status = await api.orderStatus(checkout.order_id);
     setCheckout((prev) => (prev ? { ...prev, order_status: status.status } : prev));
-    setPostAction("Buyer cancelled — refunded.");
+    setPostAction(
+      result.cancelled
+        ? "Buyer cancelled — refunded."
+        : "Too late — the cooling-off window already elapsed and the order dispatched.",
+    );
   }
 
   return (
@@ -282,16 +295,18 @@ export default function LivePage() {
                   order {checkout.order_id} · {checkout.order_status}
                 </p>
               )}
-              {checkout.decision === "ESCALATE" && checkout.order_status === "pending_approval" && (
-                <button
-                  type="button"
-                  onClick={approveAsMerchant}
-                  className="mt-2 border border-band-amber text-band-amber px-3 py-1.5 font-mono text-xs uppercase tracking-wide hover:bg-band-amber/10 transition-colors"
-                >
-                  Approve as merchant
-                </button>
-              )}
-              {checkout.decision === "HOLD" && checkout.order_status === "captured" && (
+              {checkout.decision === "ESCALATE" &&
+                checkout.order_status === "pending_approval" &&
+                !postAction && (
+                  <button
+                    type="button"
+                    onClick={approveAsMerchant}
+                    className="mt-2 border border-band-amber text-band-amber px-3 py-1.5 font-mono text-xs uppercase tracking-wide hover:bg-band-amber/10 transition-colors"
+                  >
+                    Approve as merchant
+                  </button>
+                )}
+              {checkout.decision === "HOLD" && checkout.order_status === "captured" && !postAction && (
                 <button
                   type="button"
                   onClick={undoAsBuyer}
