@@ -48,9 +48,19 @@ class RealTelegramClient:
     async def send_text(self, chat_id: str, body: str) -> str:
         import httpx
 
+        # `chat_id` here is actually "telegram:<numeric id>" — the same
+        # "channel:identifier" convention `Merchant.whatsapp_number` uses
+        # for Twilio's "whatsapp:+91..." too (see routes_telegram.py's
+        # `_chat_id_str`). Telegram's API only understands the bare
+        # numeric id; a real bug found via live testing sent the whole
+        # prefixed string straight through and got "400 chat not found"
+        # for every reply, even to a chat that had genuinely messaged the
+        # bot first.
+        bare_chat_id = chat_id.removeprefix("telegram:")
+
         async with httpx.AsyncClient() as client:
             resp = await client.post(
-                self._url("sendMessage"), json={"chat_id": chat_id, "text": body}, timeout=15
+                self._url("sendMessage"), json={"chat_id": bare_chat_id, "text": body}, timeout=15
             )
         resp.raise_for_status()
         data = resp.json()
