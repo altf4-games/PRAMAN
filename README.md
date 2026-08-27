@@ -59,23 +59,40 @@ repo.)
   isolation, two ordering tests, two fail-closed tests). `harness/labels.json`
   — 60 hand-reasoned carts committed now, untouched until Phase 9 measures
   the formula against them — see the honesty note in ARCHITECTURE.md.
-- **Phase 6 (checkout/cooling-off/substitution/approvals done; REST/MCP/deploy
-  in progress):** `core/checkout.py` orchestrates what happens after the
-  gate decides — an order is created only after ALLOW or HOLD, never on
-  BLOCK/SUBSTITUTE, and ESCALATE creates a payment-free `pending_approval`
-  order. Cooling-off (`core/cooling_off.py`), the merchant WhatsApp
-  approval inbox (`whatsapp/approvals.py` — Approve re-runs the gate from
-  R01 against the *original* signed request and updates the same order in
-  place; Decline closes cleanly; a timeout sweep denies after 15 minutes),
-  and substitution (`core/substitution.py` — deterministic filter first,
-  LLM ranks only the already-safe filtered set, cheapest-first on any LLM
-  failure) are all built and tested. 46 new tests; 214/214 total passing.
+- **Phase 6 (done; Railway/Neon/Redis Cloud deploy still pending):**
+  `core/checkout.py` orchestrates what happens after the gate decides — an
+  order is created only after ALLOW or HOLD, never on BLOCK/SUBSTITUTE, and
+  ESCALATE creates a payment-free `pending_approval` order. Cooling-off
+  (`core/cooling_off.py`), the merchant WhatsApp approval inbox
+  (`whatsapp/approvals.py` — Approve re-runs the gate from R01 against the
+  *original* signed request and updates the same order in place; Decline
+  closes cleanly; a timeout sweep denies after 15 minutes), the buyer's
+  WhatsApp cooling-off cancel (`whatsapp/cooling_off_notify.py`, sharing
+  `core/checkout.py::cancel_order` with the REST `order_undo` route so the
+  two can't drift), and substitution (`core/substitution.py` — deterministic
+  filter first, LLM ranks only the already-safe filtered set, cheapest-first
+  on any LLM failure) are all built and tested.
+  The full REST surface is live — `catalog_search`/`catalog_get`/`policy_get`
+  (read-only), `quote_request` (idempotent, agent-signed), `envelope_submit`,
+  `cart_confirm`, **`checkout_execute`** (the sole money-path route —
+  `destructiveHint: true`), `substitution_accept`, `order_status`,
+  `order_undo` — plus a Razorpay webhook (signature-verified reconciliation),
+  an APScheduler sweep (cooling-off dispatch + approval timeouts), a FastMCP
+  server (`mcp/server.py`, thin `httpx` wrappers over the same REST routes,
+  mounted at `/mcp`, with `readOnlyHint`/`idempotentHint`/`destructiveHint`
+  set per CLAUDE.md's table), and `/.well-known/agent-commerce.json`.
+  Agent-signed routes carry `timestamp`/`nonce`/`signature` as
+  `X-Praman-*` headers rather than body fields — putting a signature inside
+  the very body it signs the hash of is self-referential, a real bug this
+  build's first integration test caught before it shipped (see
+  ARCHITECTURE.md). 21 new tests; 235/235 total passing.
 
 ## What's real vs mocked (so far)
 
-- **Razorpay:** TEST MODE only, using real API credentials. Order creation
-  and webhook signature verification are real. Driving an order to
-  `captured` uses `FakeRazorpayClient.simulate_payment` because Razorpay's
+- **Razorpay:** TEST MODE only, using real API credentials. Order creation,
+  webhook signature verification, and refunds (`RazorpayClient.refund_payment`,
+  used by cooling-off cancellation) are real. Driving an order to `captured`
+  uses `FakeRazorpayClient.simulate_payment` because Razorpay's
   server-to-server (S2S) test-card API isn't enabled on this test account by
   default (confirmed: 404). See `scripts/spike_razorpay.py`.
 - **Infra:** Postgres is [Neon](https://neon.tech) (free tier) and Redis is

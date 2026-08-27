@@ -60,6 +60,14 @@ class RazorpayPayment:
     method: str | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class RazorpayRefund:
+    refund_id: str
+    payment_id: str
+    amount_paise: int
+    status: str
+
+
 class RazorpayClient(Protocol):
     """One implementation is real; one is fake. Nothing above this line
     should ever change when the real UAP-shaped payment rail replaces this
@@ -77,6 +85,8 @@ class RazorpayClient(Protocol):
     def verify_webhook_signature(self, body: bytes, signature: str) -> bool: ...
 
     def drive_to_captured(self, order_id: str, amount_paise: int) -> RazorpayPayment: ...
+
+    def refund_payment(self, payment_id: str, amount_paise: int) -> RazorpayRefund: ...
 
 
 class RealRazorpayClient:
@@ -168,6 +178,15 @@ class RealRazorpayClient:
             raise S2SUnavailableError(f"no payment id in response: {body}")
         return self.fetch_payment(str(payment_id))
 
+    def refund_payment(self, payment_id: str, amount_paise: int) -> RazorpayRefund:
+        resp: dict[str, Any] = self._client.payment.refund(payment_id, amount_paise)
+        return RazorpayRefund(
+            refund_id=resp["id"],
+            payment_id=resp["payment_id"],
+            amount_paise=resp["amount"],
+            status=resp.get("status", "processed"),
+        )
+
 
 def _payment_from_resp(resp: dict[str, Any]) -> RazorpayPayment:
     return RazorpayPayment(
@@ -244,6 +263,18 @@ class FakeRazorpayClient:
         """Mirrors `RealRazorpayClient.drive_to_captured`'s signature so
         callers don't need to branch on which implementation they hold."""
         return self.simulate_payment(order_id)
+
+    def refund_payment(self, payment_id: str, amount_paise: int) -> RazorpayRefund:
+        if payment_id not in self._payments:
+            raise KeyError(f"unknown payment_id: {payment_id}")
+        refund = RazorpayRefund(
+            refund_id=f"rfnd_fake_{uuid.uuid4().hex[:14]}",
+            payment_id=payment_id,
+            amount_paise=amount_paise,
+            status="processed",
+        )
+        self._payments[payment_id] = replace(self._payments[payment_id], status="refunded")
+        return refund
 
 
 def _replace_status(order: RazorpayOrder, status: OrderStatus) -> RazorpayOrder:

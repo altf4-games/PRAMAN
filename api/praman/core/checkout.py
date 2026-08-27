@@ -309,6 +309,55 @@ async def _handle_escalate(
     return CheckoutResult(gate_result=result, order=order)
 
 
+async def cancel_order(
+    session: AsyncSession,
+    razorpay: RazorpayClient,
+    order: Order,
+    *,
+    amount_paise: int,
+    now: datetime,
+    reason: str,
+) -> bool:
+    """Cancels a still-open amber (cooling-off) order and refunds it via
+    Razorpay. Shared by the buyer's WhatsApp CANCEL reply
+    (`whatsapp/cooling_off_notify.py`) and the REST `order_undo` route so
+    the two entry points can't drift. Returns False (no-op, nothing
+    ledgered) if the order isn't in a cancellable state — already
+    dispatched, already cancelled, or never held for cooling-off in the
+    first place; a cancellation only ever undoes a *held* order, never a
+    dispatched one (CLAUDE.md's cooling-off window is exactly the "still
+    undoable" window). `amount_paise` is the caller's responsibility (the
+    cart total) since `Order` itself doesn't carry an amount column —
+    every call site already has the cart in scope to read it from."""
+    if order.status != "captured" or order.cooling_off_until is None:
+        return False
+    if order.dispatched_at is not None or order.cancelled_at is not None:
+        return False
+
+    if order.razorpay_payment_id is not None:
+        try:
+            razorpay.refund_payment(order.razorpay_payment_id, amount_paise)
+        except Exception:
+            logger.warning(
+                "checkout: refund failed for order %s, cancelling anyway", order.id, exc_info=True
+            )
+
+    order.status = "cancelled"
+    order.cancelled_at = now
+    order.refunded_at = now
+    session.add(order)
+    await session.commit()
+
+    await append_event(
+        session,
+        f"order:{order.id}",
+        None,
+        "ORDER_CANCELLED",
+        {"order_id": order.id, "reason": reason},
+    )
+    return True
+
+
 async def _handle_substitute(
     session: AsyncSession,
     llm: LLMClient,

@@ -392,3 +392,96 @@ function as the real gate (via a single-item cart against the real
 envelope), not a simplified heuristic — "band no worse than the original"
 needs the actual band the gate would compute, not an approximation that
 could disagree with it.
+
+### Phase 6, part 2 — REST surface, MCP, webhook, scheduler, buyer undo
+
+**Decision (a real design bug found via testing, not just a choice):**
+the first version of every signed route (`quote_request`, `cart_confirm`,
+`checkout_execute`, `substitution_accept`) put `timestamp`/`nonce`/
+`signature` on the same JSON body whose hash the signature covers. That's
+self-referential — the agent signs `sha256(body)` *before* it knows the
+signature, so the signature can't also live inside the bytes it signs
+without the server hashing a different body than the agent actually
+signed. The route received the body, computed its hash including the
+now-embedded signature field, and got a hash the agent never signed —
+every request failed `AGENT_SIG_INVALID` in the very first integration
+test written against it. Fixed by moving those three fields to
+`X-Praman-Timestamp` / `X-Praman-Nonce` / `X-Praman-Signature` headers
+(`api/deps.py::get_signature_headers`), so the raw bytes a route hashes
+(`await request.body()`) are exactly, and only, the semantic payload —
+the same separation Twilio and Razorpay's own webhook signing use.
+
+**Decision:** every field that determines a cart's reversibility score or
+envelope eligibility (`category`, `category_class`, `is_personalised`,
+`return_window_days`, `fulfilment_hours`, `restocking_cost_pct`) is read
+from the `Product` row a quote references, never trusted from request
+body fields — `cart_confirm` and `checkout_execute` both re-derive these
+server-side. An agent can declare its own `qty` and reuse a merchant-signed
+`unit_price_paise`, but it cannot declare an item more reversible than the
+merchant's own catalog says it is.
+
+**Decision:** `cart_confirm` doesn't run the R01-R12 gate — only R04's
+envelope pre-check, informationally, alongside computing and persisting
+the `CartMandate`'s reversibility score/band. `checkout_execute` is the
+*only* HTTP-reachable caller of `run_gate`, matching the MCP table's
+`destructiveHint: true` on exactly one tool. An agent gets fast, useful
+feedback on an obviously-doomed cart (wrong envelope, disallowed category)
+before it ever commits to a second signed call.
+
+**Decision:** agent registration (`POST /api/agents/register`) is not one
+of CLAUDE.md §6's ten MCP tools, so it's REST-only and never wrapped into
+`mcp/server.py`. It exists because something has to create the `agents`
+rows the rest of the surface assumes — a real deployment would register an
+agent out-of-band (or via NPCI's future UAP). Supplying your own
+`public_key` never lets the server see a private key, matching `Agent`
+having no `private_key_enc` column (unlike `Merchant`); omitting it is a
+demo-only convenience that generates a keypair server-side and returns the
+private key once, in the response body, never persisted.
+
+**Decision:** `core/checkout.py` gained `cancel_order` — refund +
+mark-cancelled for a still-held cooling-off order — used identically by
+the REST `POST /api/orders/{id}/undo` route and the buyer's WhatsApp
+CANCEL reply (`whatsapp/cooling_off_notify.py`), so the two entry points
+share one implementation rather than drifting. It takes `amount_paise`
+as an explicit parameter rather than trying to derive it from `Order`
+(which has no amount column of its own) — every caller already has the
+cart in scope to read the true total from.
+
+**Decision:** `scheduler.py`'s sweep functions (`sweep_cooling_off_dispatch`,
+`sweep_approvals`) take an explicit `AsyncSession` and `now`, following the
+same testability discipline as `gate.py`/`checkout.py` — only the module's
+`_run_sweeps` (the actual APScheduler job, run every 5s) opens a real
+`SessionLocal`. The cooling-off dispatch query originally compared a
+sqlite-round-tripped (naive) `cooling_off_until` against a tz-aware `now`
+and raised `TypeError: can't compare offset-naive and offset-aware
+datetimes` in the first test run — the same round-trip quirk
+`timeutil.py::as_aware_utc` already exists to fix elsewhere; applied here
+too.
+
+**Decision:** the FastMCP app (`mcp/server.py`) wraps the REST routes over
+real HTTP (`httpx.AsyncClient` against `settings.public_base_url`) rather
+than calling route handlers as Python functions directly — "thin wrappers
+over the REST routes" per CLAUDE.md §6 means genuinely going through the
+same HTTP surface an external caller would, not a shortcut that only looks
+like one. `mcp.http_app(path="/mcp")` already serves at its own internal
+`/mcp` path; mounting it a second time at `/mcp` in `main.py` produced
+`/mcp/mcp` (caught by manually probing the mounted app before committing)
+— fixed by mounting at `/` instead, and mounting it *last*, after every
+other route, since Starlette matches mounts by registration order and an
+earlier root mount would have swallowed `/health` and everything else
+registered after it.
+
+**Decision:** the Razorpay webhook (`POST /webhooks/razorpay`) only
+reconciles/audits — this build's money path already captures and refunds
+synchronously inside `execute_checkout`/`cancel_order`, so no order's
+status is ever *first* set by the webhook arriving. Verifies the HMAC
+signature before touching the payload at all, exactly like the inbound
+Twilio webhook does.
+
+**Not built in this phase, by design:** a full re-quote-and-retry loop for
+`substitution_accept` — it re-points the cart at the accepted product and
+tells the caller to request a fresh quote and call `checkout_execute`
+again, rather than doing that chaining server-side. A substitute is a
+different product with its own live price/stock; giving it its own signed
+quote (rather than synthesizing one) keeps R05/R06/R07 checking a quote
+that's genuinely fresh, not one this route manufactured.

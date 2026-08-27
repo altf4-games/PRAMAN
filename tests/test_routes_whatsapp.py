@@ -117,6 +117,93 @@ def test_webhook_accepts_correctly_signed_request(monkeypatch: pytest.MonkeyPatc
     assert response.status_code == 200
 
 
+def test_webhook_routes_live_merchant_reply_to_approvals(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A LIVE merchant's own number should try the approval inbox before
+    falling through to onboarding — even though nothing is actually
+    pending here (the business logic itself is covered by
+    `test_approvals.py`; this just proves the routing decision)."""
+    from datetime import UTC, datetime
+
+    from praman.config import Settings
+
+    real_settings = Settings(twilio_account_sid="", twilio_auth_token="", twilio_use_fake=True)
+    from praman.api import routes_whatsapp
+
+    monkeypatch.setattr(routes_whatsapp, "get_settings", lambda: real_settings)
+
+    calls: list[str] = []
+
+    async def _spy_handle_merchant_reply(*args: object, **kwargs: object) -> bool:
+        calls.append("merchant")
+        return True
+
+    monkeypatch.setattr(routes_whatsapp, "handle_merchant_reply", _spy_handle_merchant_reply)
+
+    from praman.db import SessionLocal
+    from praman.main import app
+    from praman.models import Merchant
+
+    merchant_number = "whatsapp:+919000000123"
+
+    async def _seed() -> None:
+        async with SessionLocal() as session:
+            session.add(
+                Merchant(
+                    name="M",
+                    did="did:key:zM123",
+                    public_key="pub",
+                    private_key_enc="enc",
+                    whatsapp_number=merchant_number,
+                    onboarding_state="LIVE",
+                    agent_policy={},
+                    created_at=datetime.now(UTC),
+                )
+            )
+            await session.commit()
+
+    with TestClient(app) as client:
+        # `client.portal` runs on the same event loop the lifespan (and thus
+        # `praman.db`'s engine) started on — seeding through it, rather than
+        # a fresh `anyio.run()`, keeps this on that same loop.
+        client.portal.call(_seed)
+
+        response = client.post(
+            "/wa/webhook",
+            data={"From": merchant_number, "Body": "approve", "NumMedia": "0"},
+        )
+    assert response.status_code == 200
+    assert calls == ["merchant"]
+
+
+def test_webhook_routes_unknown_number_cancel_to_buyer_handler(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from praman.config import Settings
+
+    real_settings = Settings(twilio_account_sid="", twilio_auth_token="", twilio_use_fake=True)
+    from praman.api import routes_whatsapp
+
+    monkeypatch.setattr(routes_whatsapp, "get_settings", lambda: real_settings)
+
+    calls: list[str] = []
+
+    async def _spy_handle_buyer_reply(*args: object, **kwargs: object) -> bool:
+        calls.append("buyer")
+        return True
+
+    monkeypatch.setattr(routes_whatsapp, "handle_buyer_reply", _spy_handle_buyer_reply)
+
+    from praman.main import app
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/wa/webhook",
+            data={"From": "whatsapp:+919000000456", "Body": "CANCEL", "NumMedia": "0"},
+        )
+    assert response.status_code == 200
+    assert calls == ["buyer"]
+
+
 def test_config_get_settings_is_unaffected_after_test(monkeypatch: pytest.MonkeyPatch) -> None:
     # Sanity check that patching in the fixtures above doesn't leak between
     # tests via the lru_cache singleton.
