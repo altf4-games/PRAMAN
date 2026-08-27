@@ -32,6 +32,7 @@ dev = [
     "pytest-timeout>=2.3",
     "hypothesis>=6.112",
     "pillow>=10.4",
+    "fakeredis>=2.24",
     "ruff>=0.6",
     "mypy>=1.11",
 ]

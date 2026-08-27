@@ -37,6 +37,16 @@ repo.)
   against Twilio's actual infrastructure. **Outbound replies are blocked**,
   not by our code but by Twilio's own account tier — see "What's real vs
   mocked" below.
+- **Phase 4 (done):** the Agent Registry (`AgentRegistry` Protocol +
+  `LocalRegistry`, shaped for NPCI's forthcoming UAP), detached Ed25519
+  request-signature verification with Redis-backed nonce replay protection
+  and clock-skew rejection, signed/TTL'd Quotes with a Redis soft stock
+  hold, and **the most important function in the repo**:
+  `verify_cart_within_envelope` — pure, no I/O, `now` injected, the six
+  ordered envelope checks from the spec. 53 new tests (24 for the envelope
+  function alone, including a Hypothesis property test that no `ALLOW`ed
+  cart can ever push spend above the ceiling), all passing without a real
+  Redis server (`fakeredis`).
 
 ## What's real vs mocked (so far)
 
@@ -48,7 +58,11 @@ repo.)
 - **Infra:** Postgres is [Neon](https://neon.tech) (free tier) and Redis is
   [Redis Cloud](https://redis.io/cloud) (free tier) rather than Railway's
   bundled addons; the API itself still deploys to Railway. Local dev uses
-  `docker-compose.yml` with local Postgres/Redis containers.
+  `docker-compose.yml` with local Postgres/Redis containers. Every
+  automated test runs against `fakeredis` (an in-memory Redis emulator, not
+  a mock) rather than a real Redis instance — nonce replay protection,
+  nonce/hold TTLs, and quote stock holds are exercised for real, just
+  without a server to run.
 - **Catalog extraction (VLM):** live, real API calls to Gemini
   (`gemini-2.5-flash`) via `adapters/llm.py`'s `LLMClient` Protocol —
   `GeminiLLMClient` is one implementation; `FakeLLMClient` (used by every

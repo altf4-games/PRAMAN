@@ -214,3 +214,53 @@ account (or hitting a transient Twilio/network hiccup) now still gets
 their photo actually extracted and their catalog actually built, even
 though they never see a reply. Proven in
 `test_processing_continues_even_when_every_reply_fails_to_send`.
+
+## Phase 4 — Registry, quotes, envelope
+
+**Decision:** `GateResult` (decision/reason_code/detail/remedy/rule_id)
+lives in a new shared `core/gate_types.py` rather than in `core/gate.py`
+(which doesn't exist until Phase 5) or being duplicated per module.
+`envelope.py` and `quotes.py` both return it now; Phase 5's `gate.py` will
+import it rather than define its own competing shape. Avoids a rename or
+an import cycle later.
+
+**Decision:** `verify_cart_within_envelope` operates on plain frozen
+dataclasses (`Cart`, `CartItem`, `Envelope`) defined in `envelope.py`
+itself, not on the SQLAlchemy `CartMandate`/`IntentEnvelope` rows. This is
+what makes it trivially pure and DB-free per the spec's own requirement
+("Pure. No I/O."); a `cart_from_mandate`/`envelope_from_row` conversion
+(added when Phase 5's gate wires this into real requests) is a thin,
+untested-by-itself mapping step, not where the money-path logic lives.
+
+**Decision:** the soft stock hold in Redis is one key per `(product_id,
+quote_id)` pair (`stock_hold:{product_id}:{quote_id}` → qty, `EX`=the
+quote's own TTL), summed via `SCAN` + `MGET` in `held_stock_for_product`
+rather than a single atomic counter. A counter would need to be
+decremented on quote expiry, which Redis key expiry can't trigger for you
+without keyspace-notification plumbing; a per-quote key expiring on its
+own and being summed on read is simpler and self-correcting (an expired
+hold just stops appearing), at the cost of not being a single atomic
+number and needing a `SCAN` under real concurrency. Acceptable given the
+name is literally "soft hold," not a hard reservation — R07's real stock
+check in Phase 5 still reads live `Product.stock` as the source of truth.
+
+**Decision:** the detached agent-request signature is computed over
+`f"{method}\n{sha256(body).hexdigest()}\n{timestamp}\n{nonce}"` — newline-
+joined fields, not a JSON/JCS structure. Quotes and cart mandates use JCS
+canonicalization because their *content* needs a canonical form multiple
+parties independently reconstruct field-by-field; a request signature's
+inputs are just four already-unambiguous strings/hex-digests, so a fixed
+delimited format is simpler and equally unambiguous.
+
+**Decision:** nonce TTL in Redis is `2 * AGENT_CLOCK_SKEW_TOLERANCE_S + 10`
+(130s), not exactly the skew tolerance (60s). A request timestamped up to
+60s in the past AND one timestamped up to 60s in the future are both
+valid, so a nonce must stay rejected-as-replay across that full ~120s
+window from either side, not just 60s from when it was first seen.
+
+**Decision:** `LocalRegistry.is_revoked` returns `True` for an agent the
+registry has never heard of, not `False`. Fail-closed per CLAUDE.md §0: an
+unknown agent is untrusted, not innocent-until-proven-revoked.
+`verify_agent_request` folds "unknown" and "revoked" into the same
+`AGENT_REVOKED` reason code (R02) since the caller's remedy is identical
+either way — register (or re-register) a valid, active agent.
