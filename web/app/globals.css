@@ -1,0 +1,142 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Design tokens — CLAUDE.md §7. Ink on paper. The reversibility band
+ * (green/amber/red) is the ONLY saturated colour in the product; everything
+ * else here is greyscale ink/paper. Mirrored in lib/tokens.ts for the one
+ * place (ReversibilityGauge's SVG) that needs literal colour strings rather
+ * than a Tailwind class. This is a single deliberate palette, not a
+ * light/dark pair — there is no dark-mode variant of a ledger book.
+ */
+:root {
+  --paper: #ededea;
+  --paper-raised: #f6f7f3;
+  --ink: #141a22;
+  --ink-muted: #5a6472;
+  --rule: #c9ccc4;
+  --agent: #2d4a7c;
+  --band-green: #1f7a4c;
+  --band-amber: #b8791a;
+  --band-red: #a32c2c;
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-paper-raised: var(--paper-raised);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-rule: var(--rule);
+  --color-agent: var(--agent);
+  --color-band-green: var(--band-green);
+  --color-band-amber: var(--band-amber);
+  --color-band-red: var(--band-red);
+
+  --font-display: var(--font-newsreader);
+  --font-body: var(--font-inter-tight);
+  --font-mono: var(--font-jetbrains-mono);
+
+  /* shadcn primitives remapped onto the paper/ink system, so Button/Card/
+     Badge/etc. render in the house aesthetic without per-component work. */
+  --color-background: var(--paper);
+  --color-foreground: var(--ink);
+  --color-card: var(--paper-raised);
+  --color-card-foreground: var(--ink);
+  --color-popover: var(--paper-raised);
+  --color-popover-foreground: var(--ink);
+  --color-primary: var(--ink);
+  --color-primary-foreground: var(--paper);
+  --color-secondary: var(--paper-raised);
+  --color-secondary-foreground: var(--ink);
+  --color-muted: var(--paper-raised);
+  --color-muted-foreground: var(--ink-muted);
+  --color-accent: var(--paper-raised);
+  --color-accent-foreground: var(--ink);
+  --color-destructive: var(--band-red);
+  --color-border: var(--rule);
+  --color-input: var(--rule);
+  --color-ring: var(--ink-muted);
+
+  /* Dense, aligned, hairline — CLAUDE.md's "zero-to-2px radius" rule. */
+  --radius-sm: 0px;
+  --radius-md: 2px;
+  --radius-lg: 2px;
+  --radius-xl: 2px;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-paper text-ink;
+  }
+  html {
+    @apply font-body;
+  }
+  h1,
+  h2,
+  h3 {
+    @apply font-display;
+  }
+  code,
+  .mono,
+  .tabular {
+    @apply font-mono tabular-nums;
+  }
+}
+
+/* ReversibilityGauge's band-seal stamp — CLAUDE.md §7: "the single most
+   memorable frame in your video." A rubber-stamp thump: overshoot past
+   its resting rotation, settle back, brief ink-bloom on the ring. */
+@keyframes gauge-stamp {
+  0% {
+    opacity: 0;
+    transform: scale(2.2) rotate(0deg);
+  }
+  55% {
+    opacity: 1;
+    transform: scale(0.94) rotate(var(--stamp-rotate));
+  }
+  75% {
+    transform: scale(1.05) rotate(var(--stamp-rotate));
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(var(--stamp-rotate));
+  }
+}
+
+@keyframes gauge-fill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.gauge-stamp-animate {
+  animation: gauge-stamp 0.5s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+
+.gauge-segment-animate {
+  animation: gauge-fill 0.6s cubic-bezier(0.3, 0.8, 0.4, 1) both;
+  transform-origin: left;
+}
+
+/* CLAUDE.md's motion rule: restrained, one orchestrated moment, respect
+   the OS setting rather than assuming everyone wants animation off. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -552,3 +552,112 @@ Neon did work). This didn't block anything: Railway's own network reaches
 both Neon and Redis Cloud without restriction, which is the only thing
 that actually matters for the deployed app, and `railway`/`curl` calls
 (all HTTPS) worked throughout.
+
+## Phase 7 — Frontend
+
+**Stack substitution:** `create-next-app`'s current latest is Next.js
+16.3.3 / React 19.2, not the "Next.js 15" CLAUDE.md names — the spec was
+written against whatever was current at the time; there is no reason to
+pin an older major deliberately. Tailwind v4 (CSS-first `@theme`, no
+`tailwind.config.js`) came along with it, which changes *where* the
+design tokens live (`app/globals.css`'s `@theme inline` block) but not
+what they are.
+
+**Decision:** the design tokens (CLAUDE.md §7's colour/type table) are
+defined in exactly two places kept in sync by hand — CSS custom properties
+in `app/globals.css` (which Tailwind's `@theme` turns into utility classes
+like `bg-paper`/`text-band-green`) and a mirrored `lib/tokens.ts` object.
+The duplication is deliberate, not an oversight: `ReversibilityGauge`'s
+SVG-adjacent inline styles need literal colour *strings*, which Tailwind
+classes can't provide, and threading CSS-variable lookups through JS for
+one component wasn't worth the indirection. `lib/tokens.ts`'s own comment
+says as much and tells future edits to keep both in sync.
+
+**Decision:** this is a single deliberate palette ("ink on paper"), not a
+light/dark pair. CLAUDE.md never asked for a dark mode, and the artifact
+platform's usual dark-mode-awareness requirement is specific to Artifacts
+rendered inside Claude's own viewer — this is a normal deployed Next.js
+site, so that constraint doesn't apply here.
+
+**Decision (a real design bug, caught before it shipped):** the first
+version of `useLedgerStream` (`lib/sse.ts`) used the browser's native
+`EventSource`, whose `onmessage` only fires for the *default*, unnamed SSE
+event type. The backend's stream (`api/routes_events.py`) names every
+frame's `event:` field after that event's own `event_type` — there are
+dozens (`GATE_DECISION`, `CART_CONFIRMED`, `ORDER_DISPATCHED`, `MERCHANT_APPROVED`,
+...) — so `EventSource` would have silently received none of them. Fixed
+by dropping `EventSource` for a manual `fetch` + `ReadableStream` parser
+that reads every frame regardless of its event name (the JSON payload
+already carries `event_type` internally, so the SSE-level name is
+informational, not required).
+
+**Decision (a second real bug, found via live testing in the browser
+against a real deployed session, not a unit test):** that manual parser's
+frame-boundary search looked for `"\n\n"`, but `sse_starlette` terminates
+lines with CRLF (`\r\n`), so a blank-line frame boundary is actually
+`"\r\n\r\n"` on the wire — the search never matched, so the parser
+silently buffered forever and the ledger stream showed zero events despite
+a healthy 200 OK connection. Caught by fetching the raw stream directly
+from the browser console and inspecting the bytes rather than trusting
+the UI's "connected" indicator, which was accurate but uninformative on
+its own. Fixed by normalizing `\r\n` to `\n` once per decoded chunk before
+the frame search.
+
+**Decision:** `/catalog`'s Confirm/Edit buttons are disabled stubs. There
+is no REST route for actually confirming or correcting a low-confidence
+product — that logic lives only inside the WhatsApp state machine's
+plain-text matching (`whatsapp/onboarding.py::_handle_confirming_items`).
+Per CLAUDE.md's own cut order ("/catalog and /metrics pages → /live and
+/approvals carry the demo"), building a second, REST-only confirmation
+flow that duplicates WhatsApp's wasn't worth it; the page stays an honest,
+labelled read-only mirror instead of a broken-looking interactive one.
+
+**Decision:** three small REST routes were pulled forward from later
+phases because a page needed real content, not a stub: `GET
+/api/dispute-pack/{cart_id}` (Phase 8's dispute pack, assembled from
+already-existing pieces — `core/ledger.py::dispute_pack_events`,
+`GateDecision` rows, the `CartMandate`/`IntentEnvelope`/`Order` joins —
+for `/dispute/[orderId]`), `GET /api/metrics` (a live, honest count of
+this deployment's own gate decisions and orders — explicitly *not* the
+Phase 9 harness's Arm A/B benchmark, and `/metrics` says so on the page
+rather than implying otherwise), and `GET/POST /api/merchants`,
+`/api/catalog/review-queue`, `/api/approvals` (+`/decide`) for the picker
+UIs and the approvals inbox. `/api/approvals/{id}/decide` reuses
+`whatsapp/approvals.py`'s exact `_approve`/`_decline` functions via a new
+`decide_by_order_id`, so a click in the frontend and a WhatsApp reply can
+never produce different outcomes for the same order — CLAUDE.md §7's
+explicit requirement.
+
+**Decision:** `/live` signs its own agent requests in the browser
+(`lib/sign.ts`, `@noble/ed25519` + `@noble/hashes`) using a demo keypair
+`POST /api/agents/register` generates server-side and returns once. This
+is the one place a private key ever touches client-side JS in this
+codebase, and it's clearly scoped to that: a real agent operator would
+never sign from a browser, and the route's own docstring says the
+key-generation path exists only for this demo convenience. Signing
+requires re-serializing the exact JSON string that gets POSTed — `lib/api.ts`'s
+signed calls take a pre-serialized `raw` string rather than a plain
+object, specifically so nothing re-stringifies (and potentially
+byte-shifts) the body between signing and sending.
+
+**Decision:** "Break the ledger" (`components/LedgerStream.tsx`) never
+touches the real backend — it's a purely client-side visual: corrupt the
+*displayed* hash for rows from a chosen index onward and flip the
+chain-proof strip red. A button that actually corrupted the real,
+hash-chained dispute ledger would be a genuinely destructive action on
+audit data, which this codebase treats as a serious thing (see the whole
+point of Phase 1's `verify_chain`); simulating the same visual proof
+without ever writing a bad hash anywhere real gets the demo moment
+without that risk.
+
+**Verification:** every page was checked visually and functionally in a
+real browser against a real API — first a local docker-compose
+Postgres/Redis-backed instance, then the live Railway deployment — not
+just `next build` succeeding. The full green→amber(+cooling-off, "Break
+the ledger")→red(+"Approve as merchant") flow was driven end to end on
+`/live` with real signed requests and a live-updating ledger stream in
+both environments; `/approvals` was exercised for both Approve and
+Decline; `/dispute/[orderId]` was checked against a real captured order's
+full pack; `/metrics` and the homepage counter were checked against real
+seeded data; mobile-viewport screenshots confirmed the nav and `/live`'s
+three-column grid both reflow correctly below 768px.

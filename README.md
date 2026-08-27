@@ -11,9 +11,9 @@ still mocked. (The build spec this project follows, `CLAUDE.md`, is an
 AI-agent instruction file kept locally and intentionally not part of this
 repo.)
 
-**Live API:** [https://praman-production.up.railway.app](https://praman-production.up.railway.app)
-(`/health`, `/.well-known/agent-commerce.json`) — Railway, backed by Neon
-Postgres and Redis Cloud. No frontend yet (Phase 7).
+**Live demo:** [praman-jet.vercel.app](https://praman-jet.vercel.app) (frontend, Vercel) ·
+[praman-production.up.railway.app](https://praman-production.up.railway.app)
+(API, Railway, backed by Neon Postgres and Redis Cloud).
 
 ## Status
 
@@ -90,6 +90,28 @@ Postgres and Redis Cloud. No frontend yet (Phase 7).
   the very body it signs the hash of is self-referential, a real bug this
   build's first integration test caught before it shipped (see
   ARCHITECTURE.md). 21 new tests; 235/235 total passing.
+- **Phase 7 (done):** the Next.js 16 / Tailwind v4 / shadcn-ui frontend —
+  all seven pages (`/`, `/onboard`, `/live`, `/catalog`, `/approvals`,
+  `/dispute/[orderId]`, `/metrics`), the bahi-khata design system (ink on
+  paper; the reversibility band is the only saturated colour anywhere),
+  and `ReversibilityGauge.tsx` — the signature element, built first: a
+  live stacked-segment meter with a band-seal stamp animation that fires
+  the moment a cart crosses out of green. `/live` runs a genuine signed
+  agent session client-side (Ed25519 via `@noble/ed25519`, a demo keypair
+  the API generates once) against the real REST API, with the ledger
+  panel streaming live over SSE and a "Break the ledger" control that
+  visually corrupts the displayed chain-proof strip — client-side only,
+  never touching the real backend. A handful of small REST routes were
+  pulled forward from Phase 8/9 (`/api/merchants`,
+  `/api/catalog/review-queue`, `/api/approvals(+/decide)`,
+  `/api/dispute-pack/{cart_id}`, `/api/metrics`) because those pages
+  needed real content, not stubs. Every page was checked in a real browser
+  against both a local and the live deployment, not just a clean build —
+  see ARCHITECTURE.md's Phase 7 section for the two real bugs that caught
+  (an `EventSource` API that silently misses every named SSE event this
+  backend sends, and a CRLF-vs-LF frame-boundary bug that followed from
+  fixing the first one). Deployed to Vercel:
+  [praman-jet.vercel.app](https://praman-jet.vercel.app).
 
 ## What's real vs mocked (so far)
 
@@ -192,4 +214,13 @@ Run tests:
 
 ```bash
 pytest -q
+```
+
+Frontend:
+
+```bash
+cd web
+cp .env.example .env.local   # point NEXT_PUBLIC_API_URL at your running API
+npm install
+npm run dev
 ```

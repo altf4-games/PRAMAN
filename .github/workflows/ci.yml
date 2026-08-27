@@ -45,7 +45,6 @@ jobs:
 
   frontend:
     runs-on: ubuntu-latest
-    if: false # flips on once web/ exists (Phase 7)
     defaults:
       run:
         working-directory: web
@@ -58,3 +57,6 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: npm ci
       - run: npm run lint
+      - run: npm run build
+        env:
+          NEXT_PUBLIC_API_URL: https://praman-production.up.railway.app
