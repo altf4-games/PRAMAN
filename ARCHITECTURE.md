@@ -199,3 +199,18 @@ inbound webhook handling (signature verification, merchant creation, state
 transitions) was independently confirmed fully working live. Per the
 user's decision, the project proceeds without the account upgrade — this
 is disclosed in the README rather than worked around.
+
+**Follow-on decision:** the discovery above surfaced a real bug, not just a
+platform limitation — `_send()` originally called `whatsapp.send_text()`
+*before* most of a handler's actual work (e.g. `_handle_awaiting_media`
+sends "Reading them…" before running extraction), so a delivery failure
+raised an exception that stopped the state machine before it did anything
+useful, and Twilio saw a 500. Fixed: `_send()` now catches a send failure,
+logs it, records the outbound `WhatsAppMessage` with `wa_message_id=None`,
+and ledgers `WHATSAPP_OUTBOUND` with `delivered: false` and the error —
+an honest record of an attempted-but-failed delivery — then lets the
+caller's actual work continue regardless. A vendor on a send-blocked
+account (or hitting a transient Twilio/network hiccup) now still gets
+their photo actually extracted and their catalog actually built, even
+though they never see a reply. Proven in
+`test_processing_continues_even_when_every_reply_fails_to_send`.

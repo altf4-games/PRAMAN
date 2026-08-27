@@ -95,6 +95,11 @@ repo.)
     machine (confirming items, setting policy, reaching `LIVE`) — it's
     specifically the "watch a real WhatsApp reply arrive" moment that's
     blocked pending an account upgrade.
+  - A vendor whose account is send-blocked can still upload photos and have
+    them genuinely extracted into the catalog — a failed reply no longer
+    stops the state machine's actual work (a real bug this discovery
+    surfaced and fixed; see `ARCHITECTURE.md`). They just won't see a bot
+    reply confirming it.
 
   The Sandbox/trial also has no native interactive buttons without an
   approved content template, so every "[Yes] [No]" / "[₹500] [₹2,000]

@@ -235,6 +235,54 @@ async def test_message_after_live_gets_a_polite_reply(db_session: AsyncSession) 
     assert "already live" in whatsapp.sent_messages[-1].body.lower()
 
 
+class _FailingWhatsAppClient:
+    """Test double: every send fails, mirroring what we saw live against a
+    Twilio trial account (400 ContentSid Required). Only `send_text` is
+    exercised by onboarding.py — nothing else needs implementing here.
+    """
+
+    def __init__(self) -> None:
+        self.attempted_sends: list[str] = []
+
+    async def send_text(self, to: str, body: str) -> str:
+        self.attempted_sends.append(body)
+        raise RuntimeError("400 ContentSid Required")
+
+
+async def test_processing_continues_even_when_every_reply_fails_to_send(
+    db_session: AsyncSession,
+) -> None:
+    """A provider-side delivery failure must not stop the actual work —
+    extraction, product creation, and state transitions all still need to
+    happen even though the vendor never sees a reply."""
+    whatsapp = _FailingWhatsAppClient()
+    llm = FakeLLMClient()
+
+    merchant = await handle_inbound_whatsapp(
+        db_session, whatsapp, llm, from_number=WHATSAPP_NUMBER, body="hi", media=[]
+    )
+    assert merchant.onboarding_state == "AWAITING_MEDIA"
+
+    llm.enqueue(json.dumps([_CLEAR_ITEM, _REVIEW_ITEM]))
+    merchant = await handle_inbound_whatsapp(
+        db_session,
+        whatsapp,
+        llm,
+        from_number=WHATSAPP_NUMBER,
+        body="",
+        media=[(b"fake-image-bytes", "image/png")],
+    )
+    # extraction actually ran and the state machine actually advanced,
+    # despite every single reply above having failed to send
+    assert merchant.onboarding_state == "CONFIRMING_ITEMS"
+    assert len(whatsapp.attempted_sends) >= 3  # greeting, "Reading them…", found-summary
+
+    products_result = await db_session.execute(
+        select(Product).where(Product.merchant_id == merchant.id)
+    )
+    assert len(list(products_result.scalars().all())) == 2
+
+
 async def _seed_live_merchant(
     session: AsyncSession, whatsapp: FakeWhatsAppClient, llm: FakeLLMClient
 ) -> Merchant:

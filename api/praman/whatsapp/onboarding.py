@@ -65,7 +65,25 @@ async def _send(
     merchant: Merchant,
     body: str,
 ) -> None:
-    sid = await whatsapp.send_text(merchant.whatsapp_number, body)
+    """Sends a reply — but a failed *delivery* must never block the state
+    machine's actual work (extraction, product creation, state transitions)
+    from happening or being recorded. A provider-side send failure (e.g. a
+    Twilio account that can't send freeform WhatsApp messages) is logged and
+    ledgered honestly as a failed delivery, not silently swallowed or
+    allowed to crash the request.
+    """
+    sid: str | None = None
+    delivery_error: str | None = None
+    try:
+        sid = await whatsapp.send_text(merchant.whatsapp_number, body)
+    except Exception as exc:  # noqa: BLE001 — any provider/network failure, see docstring
+        delivery_error = f"{type(exc).__name__}: {exc}"
+        logger.warning(
+            "onboarding: failed to deliver WhatsApp reply to merchant %s: %s",
+            merchant.id,
+            delivery_error,
+        )
+
     session.add(
         WhatsAppMessage(
             merchant_id=merchant.id,
@@ -77,7 +95,10 @@ async def _send(
         )
     )
     await session.commit()
-    await _log_and_emit(session, merchant, "WHATSAPP_OUTBOUND", {"body": body})
+    payload: dict[str, Any] = {"body": body, "delivered": delivery_error is None}
+    if delivery_error is not None:
+        payload["delivery_error"] = delivery_error
+    await _log_and_emit(session, merchant, "WHATSAPP_OUTBOUND", payload)
 
 
 async def get_or_create_merchant(session: AsyncSession, whatsapp_number: str) -> Merchant:
