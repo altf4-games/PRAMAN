@@ -1,16 +1,14 @@
 """Twilio WhatsApp Sandbox inbound webhook — `POST /wa/webhook`.
 
-Verifies the Twilio signature, persists the message, and routes it. A
-message from a number matching a *merchant* first tries the merchant
-approval inbox (`whatsapp/approvals.py`) and otherwise falls through to
-onboarding; any other number tries the buyer cooling-off cancel handler
-(`whatsapp/cooling_off_notify.py`) and otherwise gets a generic reply.
-Prompt-injection note (CLAUDE.md §8): whatever a vendor sends here —
-including any text embedded in a photographed price list — only ever
-reaches `ingest/extract.py`'s LLM call or the deterministic state machine's
-plain-text matching. It never reaches `core/gate.py`, `core/envelope.py`,
-or `core/reversibility.py`, which don't import this module or anything
-downstream of it.
+Verifies the Twilio signature, persists the message, and routes it via
+`whatsapp/dispatch.py`'s shared merchant-approval → buyer-cancel →
+onboarding logic (identical to `api/routes_telegram.py`'s, factored out so
+the two channels can't drift). Prompt-injection note (CLAUDE.md §8):
+whatever a vendor sends here — including any text embedded in a
+photographed price list — only ever reaches `ingest/extract.py`'s LLM call
+or the deterministic state machine's plain-text matching. It never reaches
+`core/gate.py`, `core/envelope.py`, or `core/reversibility.py`, which
+don't import this module or anything downstream of it.
 """
 
 from __future__ import annotations
@@ -19,7 +17,6 @@ import logging
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, Request
-from sqlalchemy import select
 from starlette.responses import Response
 
 from praman.adapters.llm import get_llm_client
@@ -27,12 +24,9 @@ from praman.adapters.razorpay_client import get_razorpay_client
 from praman.config import get_settings
 from praman.core.registry import LocalRegistry
 from praman.db import SessionLocal
-from praman.models import Merchant
 from praman.redis_client import get_redis
-from praman.whatsapp.approvals import handle_merchant_reply
 from praman.whatsapp.client import get_whatsapp_client
-from praman.whatsapp.cooling_off_notify import handle_buyer_reply
-from praman.whatsapp.onboarding import handle_inbound_whatsapp
+from praman.whatsapp.dispatch import dispatch_inbound_message
 
 router = APIRouter(tags=["whatsapp"])
 logger = logging.getLogger(__name__)
@@ -92,50 +86,25 @@ async def whatsapp_webhook(request: Request) -> Response:
         media.append((content_bytes, content_type))
 
     llm = get_llm_client(settings)
+    razorpay = get_razorpay_client(
+        settings.razorpay_key_id,
+        settings.razorpay_key_secret,
+        settings.razorpay_webhook_secret,
+        use_fake=settings.razorpay_use_fake,
+    )
     async with SessionLocal() as session:
-        merchant_result = await session.execute(
-            select(Merchant).where(Merchant.whatsapp_number == from_number)
-        )
-        merchant = merchant_result.scalar_one_or_none()
-
-        if merchant is not None and merchant.onboarding_state == "LIVE":
-            razorpay = get_razorpay_client(
-                settings.razorpay_key_id,
-                settings.razorpay_key_secret,
-                settings.razorpay_webhook_secret,
-                use_fake=settings.razorpay_use_fake,
-            )
-            registry = LocalRegistry(session)
-            handled = await handle_merchant_reply(
-                session,
-                get_redis(),
-                registry,
-                razorpay,
-                whatsapp,
-                llm,
-                merchant,
-                body,
-                demo_mode=settings.demo_mode,
-                now=datetime.now(UTC),
-            )
-            if handled:
-                return Response(content="<Response></Response>", media_type="application/xml")
-
-        if merchant is None:
-            razorpay = get_razorpay_client(
-                settings.razorpay_key_id,
-                settings.razorpay_key_secret,
-                settings.razorpay_webhook_secret,
-                use_fake=settings.razorpay_use_fake,
-            )
-            handled = await handle_buyer_reply(
-                session, razorpay, whatsapp, from_number, body, now=datetime.now(UTC)
-            )
-            if handled:
-                return Response(content="<Response></Response>", media_type="application/xml")
-
-        await handle_inbound_whatsapp(
-            session, whatsapp, llm, from_number=from_number, body=body, media=media
+        await dispatch_inbound_message(
+            session,
+            get_redis(),
+            LocalRegistry(session),
+            razorpay,
+            whatsapp,
+            llm,
+            from_id=from_number,
+            body=body,
+            media=media,
+            demo_mode=settings.demo_mode,
+            now=datetime.now(UTC),
         )
 
     return Response(content="<Response></Response>", media_type="application/xml")

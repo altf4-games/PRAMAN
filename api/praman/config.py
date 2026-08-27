@@ -87,6 +87,18 @@ class Settings(BaseSettings):
     twilio_use_fake: bool = False
     public_base_url: str = "http://localhost:8000"
 
+    # Telegram — added after live phone testing found this Twilio account's
+    # Trial tier can't fetch Message/Media resources at all (see
+    # ARCHITECTURE.md's "Post-Phase-7" section), a restriction with no
+    # code-level workaround. Telegram's Bot API has no equivalent approval
+    # gate: freeform replies and media downloads both work immediately on a
+    # brand-new bot token. `whatsapp/telegram_client.py` implements the same
+    # `WhatsAppClient`-shaped Protocol Twilio does, so none of the
+    # onboarding/approvals/cooling-off business logic changed.
+    telegram_bot_token: str = ""
+    telegram_webhook_secret: str = ""
+    telegram_use_fake: bool = False
+
     llm_provider: str = "fake"  # gemini | openai | anthropic | fake
     llm_api_key: str = ""
     gemini_model: str = "gemini-2.5-flash"

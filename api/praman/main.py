@@ -20,6 +20,7 @@ from praman.api.routes_merchants import router as merchants_router
 from praman.api.routes_metrics import router as metrics_router
 from praman.api.routes_quotes import router as quotes_router
 from praman.api.routes_razorpay_webhook import router as razorpay_webhook_router
+from praman.api.routes_telegram import router as telegram_router
 from praman.api.routes_well_known import router as well_known_router
 from praman.api.routes_whatsapp import router as whatsapp_router
 from praman.config import get_settings
@@ -72,6 +73,7 @@ app.include_router(metrics_router)
 app.include_router(razorpay_webhook_router)
 app.include_router(well_known_router)
 app.include_router(whatsapp_router)
+app.include_router(telegram_router)
 
 
 @app.get("/health")

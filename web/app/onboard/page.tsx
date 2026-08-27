@@ -5,7 +5,8 @@ import { api, type MerchantOut, type ReviewProductOut } from "@/lib/api";
 import { useLedgerStream } from "@/lib/sse";
 import { WhatsAppThread, type WhatsAppMessageItem } from "@/components/WhatsAppThread";
 
-const TWILIO_NUMBER = process.env.NEXT_PUBLIC_TWILIO_WHATSAPP_NUMBER || "(configure NEXT_PUBLIC_TWILIO_WHATSAPP_NUMBER)";
+const TELEGRAM_BOT_USERNAME = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || "";
+const TWILIO_NUMBER = process.env.NEXT_PUBLIC_TWILIO_WHATSAPP_NUMBER || "";
 
 const STATE_STEPS = [
   "NEW",
@@ -94,15 +95,39 @@ export default function OnboardPage() {
         the shop that appears here to watch the whole thing happen live.
       </p>
 
-      <div className="border border-rule bg-paper-raised px-4 py-3 mb-8 flex flex-wrap items-center gap-2">
-        <span className="font-mono text-xs uppercase tracking-wider text-ink-muted">
-          WhatsApp sandbox
-        </span>
-        <span className="font-mono text-sm">{TWILIO_NUMBER}</span>
+      <div className="border border-rule bg-paper-raised px-4 py-3 mb-3 flex flex-wrap items-center gap-2">
+        <span className="font-mono text-xs uppercase tracking-wider text-ink-muted">Telegram</span>
+        {TELEGRAM_BOT_USERNAME ? (
+          <a
+            href={`https://t.me/${TELEGRAM_BOT_USERNAME}`}
+            target="_blank"
+            rel="noreferrer"
+            className="font-mono text-sm underline"
+          >
+            @{TELEGRAM_BOT_USERNAME}
+          </a>
+        ) : (
+          <span className="font-mono text-sm text-ink-muted">
+            (configure NEXT_PUBLIC_TELEGRAM_BOT_USERNAME)
+          </span>
+        )}
         <span className="text-xs text-ink-muted">
-          — one-time join code required (Twilio sandbox limitation, see README)
+          — primary channel: Twilio&apos;s trial account blocks real photo delivery entirely
+          (see README), Telegram doesn&apos;t
         </span>
       </div>
+
+      {TWILIO_NUMBER && (
+        <div className="border border-rule px-4 py-3 mb-8 flex flex-wrap items-center gap-2 opacity-70">
+          <span className="font-mono text-xs uppercase tracking-wider text-ink-muted">
+            WhatsApp sandbox (legacy)
+          </span>
+          <span className="font-mono text-sm">{TWILIO_NUMBER}</span>
+          <span className="text-xs text-ink-muted">
+            — still wired up, but photo delivery is blocked on this Twilio account tier
+          </span>
+        </div>
+      )}
 
       <div className="mb-6 flex items-center gap-3">
         <label htmlFor="merchant-picker" className="font-mono text-xs uppercase tracking-wider text-ink-muted">
@@ -145,7 +170,7 @@ export default function OnboardPage() {
       <div className="grid lg:grid-cols-2 gap-8">
         <section aria-labelledby="thread-heading">
           <h2 id="thread-heading" className="font-mono text-xs uppercase tracking-wider text-ink-muted mb-3">
-            WhatsApp thread
+            Message thread
           </h2>
           <div className="border border-rule bg-paper p-3 min-h-[24rem] max-h-[36rem] overflow-y-auto">
             <WhatsAppThread messages={messages} />

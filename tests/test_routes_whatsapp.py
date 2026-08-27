@@ -151,6 +151,7 @@ def test_webhook_routes_live_merchant_reply_to_approvals(monkeypatch: pytest.Mon
 
     real_settings = Settings(twilio_account_sid="", twilio_auth_token="", twilio_use_fake=True)
     from praman.api import routes_whatsapp
+    from praman.whatsapp import dispatch
 
     monkeypatch.setattr(routes_whatsapp, "get_settings", lambda: real_settings)
 
@@ -160,7 +161,10 @@ def test_webhook_routes_live_merchant_reply_to_approvals(monkeypatch: pytest.Mon
         calls.append("merchant")
         return True
 
-    monkeypatch.setattr(routes_whatsapp, "handle_merchant_reply", _spy_handle_merchant_reply)
+    # The merchant/buyer/onboarding routing itself now lives in
+    # whatsapp/dispatch.py (shared with the Telegram webhook) — patch the
+    # name where dispatch.py looks it up, not on routes_whatsapp anymore.
+    monkeypatch.setattr(dispatch, "handle_merchant_reply", _spy_handle_merchant_reply)
 
     from praman.db import SessionLocal
     from praman.main import app
@@ -205,6 +209,7 @@ def test_webhook_routes_unknown_number_cancel_to_buyer_handler(
 
     real_settings = Settings(twilio_account_sid="", twilio_auth_token="", twilio_use_fake=True)
     from praman.api import routes_whatsapp
+    from praman.whatsapp import dispatch
 
     monkeypatch.setattr(routes_whatsapp, "get_settings", lambda: real_settings)
 
@@ -214,7 +219,7 @@ def test_webhook_routes_unknown_number_cancel_to_buyer_handler(
         calls.append("buyer")
         return True
 
-    monkeypatch.setattr(routes_whatsapp, "handle_buyer_reply", _spy_handle_buyer_reply)
+    monkeypatch.setattr(dispatch, "handle_buyer_reply", _spy_handle_buyer_reply)
 
     from praman.main import app
 
