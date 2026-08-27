@@ -96,7 +96,18 @@ export default function LivePage() {
       .catch(() => undefined);
   }, [merchantId]);
 
-  const { events, connected } = useLedgerStream(cart ? `cart:${cart.cart_id}` : null);
+  const { events: rawEvents, connected } = useLedgerStream(
+    cart ? `cart:${cart.cart_id}` : null,
+  );
+  // Before a cart exists, useLedgerStream(null) subscribes to the *entire*
+  // bus (see its own docstring) -- harmless when only real, chain-hashed
+  // ledger events existed, but this page also now publishes agent-trace
+  // events (AGENT_THOUGHT etc.) onto the same bus, which carry no
+  // chain_hash. A real crash this caused: LedgerStream's truncateHash
+  // reading `.slice()` off an undefined chain_hash the moment an agent
+  // run started. Filtered here rather than widening LedgerStream to
+  // tolerate non-ledger payloads it was never meant to render.
+  const events = rawEvents.filter((e) => typeof e.payload.chain_hash === "string");
   const { events: agentEvents, connected: agentConnected } = useLedgerStream(
     agentRunId ? `agent:${agentRunId}` : null,
   );

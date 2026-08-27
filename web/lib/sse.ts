@@ -20,9 +20,13 @@ export interface LedgerBusEvent {
   event_type: string;
   payload: {
     event_id: string;
-    agent_did: string | null;
     ts: string;
-    chain_hash: string;
+    // Real ledger events carry both; non-ledger events published to this
+    // same bus (e.g. agent_runner's AGENT_THOUGHT/AGENT_TOOL_CALL trace)
+    // carry neither — components rendering `chain_hash` must handle it
+    // being absent (see LedgerStream.tsx's truncateHash).
+    agent_did?: string | null;
+    chain_hash?: string;
     [key: string]: unknown;
   };
 }

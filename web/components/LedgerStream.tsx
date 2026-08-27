@@ -4,7 +4,12 @@ import { useMemo, useState } from "react";
 import { CheckCircle2, TriangleAlert } from "lucide-react";
 import type { LedgerBusEvent } from "@/lib/sse";
 
-function truncateHash(hash: string): string {
+function truncateHash(hash: string | undefined): string {
+  // Defensive: this panel is meant only for real, hash-chained ledger
+  // events. A caller subscribed to an unfiltered bus (`useLedgerStream`
+  // with no session_id) can still hand it something else — render a
+  // placeholder rather than crash on `.slice()` of `undefined`.
+  if (!hash) return "—";
   return `${hash.slice(0, 8)}…${hash.slice(-6)}`;
 }
 
@@ -45,14 +50,17 @@ export function LedgerStream({
 
   const rows = useMemo(
     () =>
-      events.map((e, i) => ({
-        ...e,
-        displayHash:
-          brokenIndex !== null && i >= brokenIndex
-            ? `${e.payload.chain_hash.slice(0, 4)}00000000BAD${e.payload.chain_hash.slice(-4)}`
-            : e.payload.chain_hash,
-        broken: brokenIndex !== null && i >= brokenIndex,
-      })),
+      events.map((e, i) => {
+        const hash = e.payload.chain_hash ?? "";
+        return {
+          ...e,
+          displayHash:
+            brokenIndex !== null && i >= brokenIndex
+              ? `${hash.slice(0, 4)}00000000BAD${hash.slice(-4)}`
+              : hash,
+          broken: brokenIndex !== null && i >= brokenIndex,
+        };
+      }),
     [events, brokenIndex],
   );
 
