@@ -312,6 +312,19 @@ def create_and_capture_order(
     (order, payment, path_used) — 'real' or 'fake' — so the caller can
     ledger which path actually ran, per CLAUDE.md's honesty rule (never
     let a demo silently claim to be more real than it is).
+
+    A real bug lived here until it was caught by the harness's cooling-off
+    cancellation simulation: the Fake fallback used to construct a *new*,
+    throwaway `FakeRazorpayClient()` instead of capturing through `client`
+    itself when `client` was already a `FakeRazorpayClient` (DEMO_MODE,
+    every test, and the harness all use one as the primary client, not
+    just as a fallback). A later `cancel_order` → `refund_payment` call
+    against the *original* client then couldn't find the payment — it was
+    created in an instance nobody kept a reference to — and silently
+    failed, while `cancel_order` still marked the order `refunded_at`
+    regardless. Fixed by capturing through `client` directly whenever it's
+    already Fake, so the payment a later refund looks for is the one that
+    actually exists.
     """
     order = client.create_order(amount_paise, currency, receipt, notes)
 
@@ -321,12 +334,22 @@ def create_and_capture_order(
             return order, payment, "real"
         except S2SUnavailableError:
             pass  # fall through to the Fake path below, same as Phase 0
+        # S2S unavailable: the payment this produces was never real to
+        # begin with, so a later refund against the real Razorpay API
+        # cannot succeed for it regardless of which Fake instance
+        # captures it — disclosed in README's "what's real vs mocked".
+        fake = FakeRazorpayClient()
+        fake_order = fake.create_order(amount_paise, currency, receipt, notes)
+        payment = fake.simulate_payment(fake_order.order_id)
+        # Report under the REAL order's id — that's the order of record
+        # (the one whose notes carry the cart_mandate_hash and that
+        # webhooks/the ledger reference), even though capture itself used
+        # the Fake path.
+        payment = replace(payment, order_id=order.order_id)
+        return order, payment, "fake"
 
-    fake = FakeRazorpayClient()
-    fake_order = fake.create_order(amount_paise, currency, receipt, notes)
-    payment = fake.simulate_payment(fake_order.order_id)
-    # Report under the REAL order's id — that's the order of record (the
-    # one whose notes carry the cart_mandate_hash and that webhooks/the
-    # ledger reference), even though capture itself used the Fake path.
-    payment = replace(payment, order_id=order.order_id)
+    # `client` is already a FakeRazorpayClient — capture through it
+    # directly so its own `_payments` dict actually holds this payment for
+    # a later `refund_payment` call to find.
+    payment = client.simulate_payment(order.order_id)
     return order, payment, "fake"

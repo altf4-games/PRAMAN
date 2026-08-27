@@ -1,0 +1,60 @@
+{
+  "sessions": {
+    "total": 200,
+    "arm_a": 197,
+    "arm_b": 197
+  },
+  "gmv_paise": {
+    "arm_a": 186315900,
+    "arm_b": 69364500
+  },
+  "bad_transactions": {
+    "arm_a": {
+      "count": 65,
+      "value_paise": 100251400
+    },
+    "arm_b": {
+      "count": 0,
+      "value_paise": 0
+    }
+  },
+  "gate_precision_recall": {
+    "true_positive": 65,
+    "false_negative": 0,
+    "false_positive": 0,
+    "precision": 1.0,
+    "recall": 1.0
+  },
+  "false_positive_cost_paise": 0,
+  "substitution_offered_count": 11,
+  "reversibility_band_accuracy": {
+    "total": 64,
+    "matches": 39,
+    "accuracy": 0.609375,
+    "confusion": {
+      "green|amber": 25,
+      "amber|amber": 24,
+      "red|red": 15
+    }
+  },
+  "cooling_off": {
+    "held": 117,
+    "cancelled": 39,
+    "cancellation_rate": 0.3333333333333333
+  },
+  "dispute_pack_completeness": {
+    "total": 132,
+    "complete": 132,
+    "completeness": 1.0
+  },
+  "gate_latency_ms": {
+    "p50": 3.621457999543054,
+    "p95": 3.7359414018283132,
+    "mean": 3.0784200254838376
+  },
+  "injection_invariance": {
+    "total": 15,
+    "passed": 15,
+    "pass_rate": 1.0
+  }
+}

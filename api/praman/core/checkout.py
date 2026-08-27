@@ -328,15 +328,26 @@ async def cancel_order(
     dispatched one (CLAUDE.md's cooling-off window is exactly the "still
     undoable" window). `amount_paise` is the caller's responsibility (the
     cart total) since `Order` itself doesn't carry an amount column —
-    every call site already has the cart in scope to read it from."""
+    every call site already has the cart in scope to read it from.
+
+    Dispatch is withheld unconditionally (`status`/`cancelled_at` are
+    always set once we get this far) — but `refunded_at` is set only if
+    the refund call actually succeeded. A real bug lived here: it used to
+    set `refunded_at` regardless of whether `refund_payment` raised,
+    caught via `create_and_capture_order`'s own fallback-client bug (see
+    its docstring) making refunds fail in a way this function then
+    silently claimed had succeeded — exactly the kind of "evidence by
+    construction" gap the whole project exists to prevent."""
     if order.status != "captured" or order.cooling_off_until is None:
         return False
     if order.dispatched_at is not None or order.cancelled_at is not None:
         return False
 
+    refund_succeeded = False
     if order.razorpay_payment_id is not None:
         try:
             razorpay.refund_payment(order.razorpay_payment_id, amount_paise)
+            refund_succeeded = True
         except Exception:
             logger.warning(
                 "checkout: refund failed for order %s, cancelling anyway", order.id, exc_info=True
@@ -344,7 +355,7 @@ async def cancel_order(
 
     order.status = "cancelled"
     order.cancelled_at = now
-    order.refunded_at = now
+    order.refunded_at = now if refund_succeeded else None
     session.add(order)
     await session.commit()
 
@@ -353,7 +364,7 @@ async def cancel_order(
         f"order:{order.id}",
         None,
         "ORDER_CANCELLED",
-        {"order_id": order.id, "reason": reason},
+        {"order_id": order.id, "reason": reason, "refund_succeeded": refund_succeeded},
     )
     return True
 
