@@ -99,6 +99,7 @@ async def buy(
     budget_paise: int,
     qty: int,
     min_reversibility: float,
+    buyer: str,
 ) -> None:
     print(f"Goal: {goal!r}  |  budget: ₹{budget_paise / 100:.2f}  |  merchant: {merchant_id}")
 
@@ -148,7 +149,7 @@ async def buy(
                     "merchant_id": merchant_id,
                     "agent_did": agent_did,
                     "user_ref": "mcp-agent-demo",
-                    "user_whatsapp": "whatsapp:+919000000000",
+                    "user_whatsapp": buyer,
                     "ceiling_paise": budget_paise,
                     "max_single_txn_paise": budget_paise,
                     "allowed_categories": [product["category"]],
@@ -225,6 +226,12 @@ def main() -> None:
         default=0.0,
         help="R08 only escalates below this -- 0 means a red-band item still ALLOWs",
     )
+    parser.add_argument(
+        "--buyer",
+        default="whatsapp:+919000000000",
+        help="the buyer's channel:address -- e.g. telegram:8980338920 to receive the real "
+        "cooling-off/approval notification on your own account instead of a placeholder",
+    )
     args = parser.parse_args()
 
     asyncio.run(
@@ -235,6 +242,7 @@ def main() -> None:
             budget_paise=args.budget_paise,
             qty=args.qty,
             min_reversibility=args.min_reversibility,
+            buyer=args.buyer,
         )
     )
 

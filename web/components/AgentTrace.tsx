@@ -44,6 +44,25 @@ export function AgentTrace({
   );
 }
 
+/** Shortens any long string value (DIDs, hashes, quote ids) recursively
+ * before stringifying, rather than relying on CSS `truncate` — which
+ * doesn't actually truncate here, since these are inline `<span>`s in a
+ * freely-wrapping `<p>`, not a fixed-width block. Without this, a raw
+ * `did:key:z6Mk...` or 32-char id blows the row onto several wrapped
+ * lines instead of reading as one compact summary. */
+function shorten(value: unknown): unknown {
+  if (typeof value === "string") {
+    return value.length > 24 ? `${value.slice(0, 10)}…${value.slice(-6)}` : value;
+  }
+  if (Array.isArray(value)) return value.map(shorten);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, shorten(v)]),
+    );
+  }
+  return value;
+}
+
 function renderRow(e: LedgerBusEvent) {
   const p = e.payload as Record<string, unknown>;
   switch (e.event_type) {
@@ -58,20 +77,18 @@ function renderRow(e: LedgerBusEvent) {
       return <p className="italic text-ink-muted">&ldquo;{String(p.text)}&rdquo;</p>;
     case "AGENT_TOOL_CALL":
       return (
-        <p>
+        <p className="break-all">
           <span className="font-mono text-agent">→ {String(p.tool)}</span>{" "}
-          <span className="font-mono text-ink-muted truncate">{JSON.stringify(p.args)}</span>
+          <span className="font-mono text-ink-muted">{JSON.stringify(shorten(p.args))}</span>
         </p>
       );
     case "AGENT_TOOL_RESULT": {
       const result = p.result as Record<string, unknown> | undefined;
       const isError = result && "error" in result;
       return (
-        <p className={isError ? "text-band-red" : "text-band-green"}>
+        <p className={`break-all ${isError ? "text-band-red" : "text-band-green"}`}>
           <span className="font-mono uppercase text-[10px]">{isError ? "error" : "ok"}</span>{" "}
-          <span className="font-mono text-ink-muted truncate">
-            {JSON.stringify(result).slice(0, 160)}
-          </span>
+          <span className="font-mono text-ink-muted">{JSON.stringify(shorten(result))}</span>
         </p>
       );
     }
