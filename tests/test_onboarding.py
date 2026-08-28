@@ -1,5 +1,7 @@
-"""End-to-end walk through the onboarding state machine (the design spec's Phase 3):
-NEW -> AWAITING_MEDIA -> EXTRACTING -> CONFIRMING_ITEMS -> SETTING_POLICY -> LIVE.
+"""End-to-end walk through the onboarding state machine (the design spec's Phase 3,
+plus the AWAITING_NAME step added afterward — see onboarding.py's module docstring):
+NEW -> AWAITING_NAME -> AWAITING_MEDIA -> EXTRACTING -> CONFIRMING_ITEMS
+    -> SETTING_POLICY -> LIVE.
 """
 
 from __future__ import annotations
@@ -67,16 +69,35 @@ async def _get_merchant(session: AsyncSession) -> Merchant:
     return result.scalar_one()
 
 
+async def _advance_to_awaiting_media(session, whatsapp, llm: FakeLLMClient) -> Merchant:
+    """Shared setup for every test below that doesn't itself care about
+    NEW/AWAITING_NAME — sends the two turns needed to reach AWAITING_MEDIA."""
+    await handle_inbound_whatsapp(
+        session, whatsapp, llm, from_number=WHATSAPP_NUMBER, body="hi", media=[]
+    )
+    return await handle_inbound_whatsapp(
+        session, whatsapp, llm, from_number=WHATSAPP_NUMBER, body="Gupta Kirana Store", media=[]
+    )
+
+
 async def test_full_onboarding_flow(db_session: AsyncSession) -> None:
     whatsapp = FakeWhatsAppClient()
     llm = FakeLLMClient()
 
-    # --- NEW -> AWAITING_MEDIA ---
+    # --- NEW -> AWAITING_NAME ---
     merchant = await handle_inbound_whatsapp(
         db_session, whatsapp, llm, from_number=WHATSAPP_NUMBER, body="hi", media=[]
     )
-    assert merchant.onboarding_state == "AWAITING_MEDIA"
+    assert merchant.onboarding_state == "AWAITING_NAME"
     assert "Namaste" in whatsapp.sent_messages[-1].body
+
+    # --- AWAITING_NAME -> AWAITING_MEDIA ---
+    merchant = await handle_inbound_whatsapp(
+        db_session, whatsapp, llm, from_number=WHATSAPP_NUMBER, body="Gupta Kirana Store", media=[]
+    )
+    assert merchant.onboarding_state == "AWAITING_MEDIA"
+    assert merchant.name == "Gupta Kirana Store"
+    assert "Gupta Kirana Store" in whatsapp.sent_messages[-1].body
 
     # --- AWAITING_MEDIA -> EXTRACTING -> CONFIRMING_ITEMS ---
     llm.enqueue(json.dumps([_CLEAR_ITEM, _REVIEW_ITEM]))
@@ -150,13 +171,26 @@ async def test_new_merchant_private_key_is_encrypted_at_rest(db_session: AsyncSe
     assert len(decrypted) == 64  # 32-byte Ed25519 private key, hex-encoded
 
 
+async def test_awaiting_name_with_blank_reply_reprompts(db_session: AsyncSession) -> None:
+    whatsapp = FakeWhatsAppClient()
+    llm = FakeLLMClient()
+
+    await handle_inbound_whatsapp(
+        db_session, whatsapp, llm, from_number=WHATSAPP_NUMBER, body="hi", media=[]
+    )
+    merchant = await handle_inbound_whatsapp(
+        db_session, whatsapp, llm, from_number=WHATSAPP_NUMBER, body="   ", media=[]
+    )
+    # a blank reply must not advance the state or silently accept an empty name
+    assert merchant.onboarding_state == "AWAITING_NAME"
+    assert "shop's name" in whatsapp.sent_messages[-1].body.lower()
+
+
 async def test_awaiting_media_with_no_photos_reprompts(db_session: AsyncSession) -> None:
     whatsapp = FakeWhatsAppClient()
     llm = FakeLLMClient()
 
-    merchant = await handle_inbound_whatsapp(
-        db_session, whatsapp, llm, from_number=WHATSAPP_NUMBER, body="hi", media=[]
-    )
+    merchant = await _advance_to_awaiting_media(db_session, whatsapp, llm)
     assert merchant.onboarding_state == "AWAITING_MEDIA"
 
     merchant = await handle_inbound_whatsapp(
@@ -171,9 +205,7 @@ async def test_confirming_items_correction_updates_price(db_session: AsyncSessio
     whatsapp = FakeWhatsAppClient()
     llm = FakeLLMClient()
 
-    await handle_inbound_whatsapp(
-        db_session, whatsapp, llm, from_number=WHATSAPP_NUMBER, body="hi", media=[]
-    )
+    await _advance_to_awaiting_media(db_session, whatsapp, llm)
     llm.enqueue(json.dumps([_REVIEW_ITEM]))
     merchant = await handle_inbound_whatsapp(
         db_session,
@@ -200,9 +232,7 @@ async def test_setting_policy_rejects_unparseable_reply(db_session: AsyncSession
     whatsapp = FakeWhatsAppClient()
     llm = FakeLLMClient()
 
-    await handle_inbound_whatsapp(
-        db_session, whatsapp, llm, from_number=WHATSAPP_NUMBER, body="hi", media=[]
-    )
+    await _advance_to_awaiting_media(db_session, whatsapp, llm)
     llm.enqueue(json.dumps([_CLEAR_ITEM]))
     await handle_inbound_whatsapp(
         db_session,
@@ -258,9 +288,7 @@ async def test_processing_continues_even_when_every_reply_fails_to_send(
     whatsapp = _FailingWhatsAppClient()
     llm = FakeLLMClient()
 
-    merchant = await handle_inbound_whatsapp(
-        db_session, whatsapp, llm, from_number=WHATSAPP_NUMBER, body="hi", media=[]
-    )
+    merchant = await _advance_to_awaiting_media(db_session, whatsapp, llm)
     assert merchant.onboarding_state == "AWAITING_MEDIA"
 
     llm.enqueue(json.dumps([_CLEAR_ITEM, _REVIEW_ITEM]))
@@ -275,7 +303,7 @@ async def test_processing_continues_even_when_every_reply_fails_to_send(
     # extraction actually ran and the state machine actually advanced,
     # despite every single reply above having failed to send
     assert merchant.onboarding_state == "CONFIRMING_ITEMS"
-    assert len(whatsapp.attempted_sends) >= 3  # greeting, "Reading them…", found-summary
+    assert len(whatsapp.attempted_sends) >= 4  # greeting, name ack, "Reading them…", found-summary
 
     products_result = await db_session.execute(
         select(Product).where(Product.merchant_id == merchant.id)
@@ -286,9 +314,7 @@ async def test_processing_continues_even_when_every_reply_fails_to_send(
 async def _seed_live_merchant(
     session: AsyncSession, whatsapp: FakeWhatsAppClient, llm: FakeLLMClient
 ) -> Merchant:
-    await handle_inbound_whatsapp(
-        session, whatsapp, llm, from_number=WHATSAPP_NUMBER, body="hi", media=[]
-    )
+    await _advance_to_awaiting_media(session, whatsapp, llm)
     llm.enqueue(json.dumps([_CLEAR_ITEM]))
     await handle_inbound_whatsapp(
         session,

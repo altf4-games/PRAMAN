@@ -1,6 +1,15 @@
 """Vendor onboarding state machine (the design spec's Phase 3):
 
-    NEW -> AWAITING_MEDIA -> EXTRACTING -> CONFIRMING_ITEMS -> SETTING_POLICY -> LIVE
+    NEW -> AWAITING_NAME -> AWAITING_MEDIA -> EXTRACTING -> CONFIRMING_ITEMS
+        -> SETTING_POLICY -> LIVE
+
+AWAITING_NAME is a real addition, not in the original script: every
+merchant used to be created as `f"Merchant {whatsapp_number}"` and never
+asked for an actual shop name — harmless for the state machine itself,
+but it meant a merchant's storefront, dashboard, and every agent-facing
+listing displayed an ugly, unprofessional default forever unless someone
+manually renamed the row afterward. Asking once, up front, fixes that at
+the source instead of leaving it as a standing manual step.
 
 Persisted in `Merchant.onboarding_state`. Every transition appends a ledger
 event (which also publishes to the SSE bus, so `/onboard` can mirror the
@@ -174,12 +183,30 @@ async def _ask_next_review_item(
 
 
 async def _handle_new(session: AsyncSession, whatsapp: WhatsAppClient, merchant: Merchant) -> None:
+    await _transition(session, merchant, "AWAITING_NAME")
+    await _send(session, whatsapp, merchant, "Namaste! What's your shop's name?")
+
+
+async def _handle_awaiting_name(
+    session: AsyncSession, whatsapp: WhatsAppClient, merchant: Merchant, body: str
+) -> None:
+    name = body.strip()
+    if not name:
+        await _send(session, whatsapp, merchant, "Please reply with your shop's name.")
+        return
+
+    old_name = merchant.name
+    merchant.name = name
+    await session.commit()
+    await _log_and_emit(session, merchant, "SHOP_NAME_SET", {"from": old_name, "to": name})
+
     await _transition(session, merchant, "AWAITING_MEDIA")
     await _send(
         session,
         whatsapp,
         merchant,
-        "Namaste. Send photos of your price list or products — as many as you like.",
+        f"Nice to meet you, {name}! Send photos of your price list or products — "
+        "as many as you like.",
     )
 
 
@@ -377,6 +404,8 @@ async def handle_inbound_whatsapp(
     state = merchant.onboarding_state
     if state == "NEW":
         await _handle_new(session, whatsapp, merchant)
+    elif state == "AWAITING_NAME":
+        await _handle_awaiting_name(session, whatsapp, merchant, body)
     elif state == "AWAITING_MEDIA":
         await _handle_awaiting_media(session, whatsapp, llm, merchant, media)
     elif state == "CONFIRMING_ITEMS":
