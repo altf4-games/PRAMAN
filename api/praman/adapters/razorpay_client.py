@@ -203,7 +203,19 @@ class RealRazorpayClient:
         return self.fetch_payment(str(payment_id))
 
     def refund_payment(self, payment_id: str, amount_paise: int) -> RazorpayRefund:
-        resp: dict[str, Any] = self._client.payment.refund(payment_id, amount_paise)
+        # A real bug lived here: `payment.refund`'s second positional arg is
+        # `data`, a dict the SDK JSON-serializes as the request body -- we
+        # were passing the raw `amount_paise` int directly, producing a
+        # bare JSON scalar ("18000") instead of {"amount": 18000}. Razorpay
+        # returned an empty body for the malformed request, which crashed
+        # the SDK's own response.json() with a JSONDecodeError, which
+        # `cancel_order`'s try/except caught and logged as "refund failed"
+        # -- silently, since a cancellation still succeeds and reports
+        # `refunded_at: null` rather than raising. Found live: a real undo
+        # went through, cancelled the order correctly, but never actually
+        # refunded the payment on Razorpay's side. Confirmed by calling the
+        # real API directly with a correctly-shaped body, which worked.
+        resp: dict[str, Any] = self._client.payment.refund(payment_id, {"amount": amount_paise})
         return RazorpayRefund(
             refund_id=resp["id"],
             payment_id=resp["payment_id"],

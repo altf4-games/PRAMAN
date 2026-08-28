@@ -122,3 +122,38 @@ def test_create_and_capture_order_uses_real_path_when_s2s_succeeds(
     assert path == "real"
     assert payment.payment_id == "pay_real_1"
     assert order.order_id == "order_real_456"
+
+
+def test_refund_payment_passes_amount_as_a_dict_not_a_bare_int(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression test for a real bug: `payment.refund`'s second positional
+    argument is `data`, a dict the SDK JSON-serializes as the request body.
+    Passing the raw `amount_paise` int directly produced a bare JSON
+    scalar instead of `{"amount": ...}`, which Razorpay responded to with
+    an empty body -- crashing the SDK's own `response.json()` and getting
+    silently swallowed by `cancel_order`'s try/except, so a real undo
+    cancelled the order but never actually refunded the payment. Found
+    live: an actual buyer undo succeeded at the app level while the real
+    Razorpay refund silently failed underneath it."""
+    client = RealRazorpayClient("rzp_test_dummy", "dummy_secret", "dummy_webhook_secret")
+
+    captured_args: dict[str, object] = {}
+
+    def _fake_refund(payment_id: str, data: object = None, **kwargs: object) -> dict[str, object]:
+        captured_args["payment_id"] = payment_id
+        captured_args["data"] = data
+        return {
+            "id": "rfnd_test123",
+            "payment_id": payment_id,
+            "amount": 18000,
+            "status": "processed",
+        }
+
+    monkeypatch.setattr(client._client.payment, "refund", _fake_refund)
+
+    refund = client.refund_payment("pay_test123", 18000)
+
+    assert captured_args["data"] == {"amount": 18000}
+    assert refund.refund_id == "rfnd_test123"
+    assert refund.amount_paise == 18000
