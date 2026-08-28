@@ -26,7 +26,8 @@ from praman.db import SessionLocal
 from praman.models import Order
 from praman.timeutil import as_aware_utc
 from praman.whatsapp.approvals import sweep_expired_approvals
-from praman.whatsapp.client import WhatsAppClient, get_whatsapp_client
+from praman.whatsapp.client import MultiChannelClient, WhatsAppClient, get_whatsapp_client
+from praman.whatsapp.telegram_client import get_telegram_client
 
 logger = logging.getLogger(__name__)
 
@@ -65,11 +66,19 @@ async def sweep_approvals(session: AsyncSession, whatsapp: WhatsAppClient, now: 
 async def _run_sweeps() -> None:
     now = datetime.now(UTC)
     settings = get_settings()
-    whatsapp = get_whatsapp_client(
-        settings.twilio_account_sid,
-        settings.twilio_auth_token,
-        settings.twilio_whatsapp_from,
-        use_fake=settings.twilio_use_fake,
+    # Same routing-by-recipient-address fix as `deps.py::get_whatsapp_dep`
+    # — a merchant-approval timeout denial for a Telegram-onboarded
+    # merchant must go out over Telegram, not be silently attempted
+    # through a Twilio client that has no idea what a `telegram:` address
+    # is.
+    whatsapp: WhatsAppClient = MultiChannelClient(
+        get_whatsapp_client(
+            settings.twilio_account_sid,
+            settings.twilio_auth_token,
+            settings.twilio_whatsapp_from,
+            use_fake=settings.twilio_use_fake,
+        ),
+        get_telegram_client(settings.telegram_bot_token, use_fake=settings.telegram_use_fake),
     )
     try:
         async with SessionLocal() as session:

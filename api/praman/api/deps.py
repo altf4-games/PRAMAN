@@ -21,7 +21,8 @@ from praman.config import Settings, get_settings
 from praman.core.registry import AgentRegistry, LocalRegistry
 from praman.db import SessionLocal
 from praman.redis_client import get_redis
-from praman.whatsapp.client import WhatsAppClient, get_whatsapp_client
+from praman.whatsapp.client import MultiChannelClient, WhatsAppClient, get_whatsapp_client
+from praman.whatsapp.telegram_client import get_telegram_client
 
 
 async def get_db_session() -> AsyncIterator[AsyncSession]:
@@ -53,12 +54,20 @@ def get_razorpay_dep(
 def get_whatsapp_dep(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> WhatsAppClient:
-    return get_whatsapp_client(
+    """Routes by recipient address (`telegram:` vs `whatsapp:`) rather than
+    returning a single fixed provider — see `MultiChannelClient`'s own
+    docstring for the real bug this fixes (cooling-off/approval messages
+    to a Telegram-onboarded merchant were always attempted over Twilio)."""
+    whatsapp_client = get_whatsapp_client(
         settings.twilio_account_sid,
         settings.twilio_auth_token,
         settings.twilio_whatsapp_from,
         use_fake=settings.twilio_use_fake,
     )
+    telegram_client = get_telegram_client(
+        settings.telegram_bot_token, use_fake=settings.telegram_use_fake
+    )
+    return MultiChannelClient(whatsapp_client, telegram_client)
 
 
 def get_llm_dep(settings: Annotated[Settings, Depends(get_settings)]) -> LLMClient:

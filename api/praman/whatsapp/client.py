@@ -118,3 +118,52 @@ def get_whatsapp_client(
     if use_fake or not account_sid:
         return FakeWhatsAppClient(auth_token=auth_token or "fake_twilio_auth_token")
     return RealTwilioClient(account_sid, auth_token, whatsapp_from)
+
+
+class MultiChannelClient:
+    """Dispatches `send_text` (and `fetch_media`) to Telegram or
+    WhatsApp/Twilio based on the recipient address's own `telegram:` /
+    `whatsapp:` prefix — the same convention `Merchant.whatsapp_number`
+    and `IntentEnvelope.user_whatsapp` already store either kind of
+    identifier under.
+
+    A real bug found before ever being exercised end to end: onboarding
+    replies work correctly over Telegram because `routes_telegram.py`'s
+    inbound webhook constructs its own `RealTelegramClient` and passes it
+    straight into the shared onboarding/checkout logic for that one
+    request. But the buyer's cooling-off notification and the merchant's
+    approval request are sent from `core/checkout.py`, triggered by
+    `checkout_execute` (a REST call, not an inbound Telegram webhook) —
+    that code path only ever had `WhatsAppDep`, which constructed a
+    Twilio client unconditionally. A Telegram-onboarded merchant's
+    cooling-off/approval messages were therefore always attempted over
+    Twilio, which has no idea what to do with a `telegram:` address. This
+    class is the fix: one client, injected everywhere a
+    `WhatsAppClient` is needed, that picks the right underlying provider
+    per message instead of per request.
+    """
+
+    def __init__(self, whatsapp_client: WhatsAppClient, telegram_client: WhatsAppClient) -> None:
+        self._whatsapp = whatsapp_client
+        self._telegram = telegram_client
+
+    def _for(self, address: str) -> WhatsAppClient:
+        return self._telegram if address.startswith("telegram:") else self._whatsapp
+
+    async def send_text(self, to: str, body: str) -> str:
+        return await self._for(to).send_text(to, body)
+
+    def verify_webhook_signature(self, url: str, params: dict[str, str], signature: str) -> bool:
+        # Only ever invoked by the WhatsApp/Twilio inbound webhook route,
+        # which already holds and uses its own Twilio client directly —
+        # never actually routed through this multiplexer in practice, but
+        # implemented for Protocol conformance (Telegram's own inbound
+        # verification is a header comparison done in routes_telegram.py,
+        # not through this method — see telegram_client.py's docstring).
+        return self._whatsapp.verify_webhook_signature(url, params, signature)
+
+    async def fetch_media(self, media_url: str) -> tuple[bytes, str]:
+        # Same reasoning as verify_webhook_signature above: only ever
+        # called from within an inbound webhook handler, which already
+        # has its own channel-specific client.
+        return await self._whatsapp.fetch_media(media_url)

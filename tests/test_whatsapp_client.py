@@ -68,3 +68,37 @@ def test_get_whatsapp_client_returns_fake_when_use_fake_forced() -> None:
 def test_get_whatsapp_client_returns_real_with_credentials() -> None:
     client = get_whatsapp_client("AC_real_sid", "real_token", "whatsapp:+14155238886")
     assert type(client).__name__ == "RealTwilioClient"
+
+
+# --- MultiChannelClient: routes by recipient address prefix ---
+
+
+async def test_multi_channel_client_routes_telegram_addresses_to_telegram() -> None:
+    from praman.whatsapp.client import MultiChannelClient
+    from praman.whatsapp.telegram_client import FakeTelegramClient
+
+    whatsapp = FakeWhatsAppClient()
+    telegram = FakeTelegramClient()
+    client = MultiChannelClient(whatsapp, telegram)
+
+    await client.send_text("telegram:8980338920", "cooling-off notice")
+
+    assert len(telegram.sent_messages) == 1
+    assert telegram.sent_messages[0].chat_id == "telegram:8980338920"
+    assert telegram.sent_messages[0].body == "cooling-off notice"
+    assert whatsapp.sent_messages == []
+
+
+async def test_multi_channel_client_routes_whatsapp_addresses_to_whatsapp() -> None:
+    from praman.whatsapp.client import MultiChannelClient
+    from praman.whatsapp.telegram_client import FakeTelegramClient
+
+    whatsapp = FakeWhatsAppClient()
+    telegram = FakeTelegramClient()
+    client = MultiChannelClient(whatsapp, telegram)
+
+    await client.send_text("whatsapp:+919000000001", "merchant approval request")
+
+    assert len(whatsapp.sent_messages) == 1
+    assert whatsapp.sent_messages[0].to == "whatsapp:+919000000001"
+    assert telegram.sent_messages == []
