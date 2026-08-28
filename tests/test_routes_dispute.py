@@ -112,7 +112,7 @@ async def _seed_full_cart(session: AsyncSession, **order_overrides: object) -> t
         tax_paise=0,
         total_paise=10000,
         reversibility_score=0.8,
-        reversibility_breakdown={"f_return": 0.14, "f_class": 0.9},
+        reversibility_breakdown={"f_unwind": 0.14, "f_class": 0.9},
         band="green",
         agent_sig="cart-sig",
         created_at=NOW,

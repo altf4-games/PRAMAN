@@ -11,7 +11,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # --- Reversibility Ladder weights (the design spec §5) ---
 # Named constants, never inline literals, per the non-negotiable rule.
-REVERSIBILITY_WEIGHT_RETURN = 0.35
+REVERSIBILITY_WEIGHT_UNWIND = 0.35
 REVERSIBILITY_WEIGHT_CLASS = 0.25
 REVERSIBILITY_WEIGHT_SPEED = 0.15
 REVERSIBILITY_WEIGHT_RESTOCK = 0.10
@@ -20,6 +20,21 @@ REVERSIBILITY_WEIGHT_VALUE = 0.15
 RETURN_WINDOW_NORMALISATION_DAYS = 14
 FULFILMENT_NORMALISATION_HOURS = 336  # 14 days
 RESTOCKING_COST_NORMALISATION_PCT = 0.30
+
+# f_unwind (core/reversibility.py): real-world "returnless refund" economics
+# for perishable/consumable/digital items — a merchant refunding without
+# asking for the item back once the physical/logistics cost of a real
+# return would exceed what's recovered. Retail research on this places the
+# threshold around $15-30 (return processing commonly runs 20-65% of item
+# value once shipping/labor/restocking are counted) for DTC-scale
+# operations; a kirana-scale merchant with no formal reverse-logistics
+# infrastructure at all absorbs small losses as ordinary practice at a
+# correspondingly lower absolute rupee ceiling. ₹1,000 is the deliberate,
+# documented choice here — see ARCHITECTURE.md's reversibility formula
+# entry for the sources and reasoning, not a number picked to fit any
+# particular test result.
+UNWIND_FREE_CEILING_PAISE = 100_000  # ₹1,000
+UNWIND_FREE_CATEGORY_CLASSES = frozenset({"perishable", "consumable", "digital"})
 
 CATEGORY_CLASS_SCORES: dict[str, float] = {
     "perishable": 0.95,

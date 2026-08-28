@@ -217,7 +217,7 @@ function cartScore(pack: { reversibility_breakdown: Record<string, number> }): n
   // does, purely for display (never re-used for a decision).
   const b = pack.reversibility_breakdown;
   return (
-    0.35 * (b.f_return ?? 0) +
+    0.35 * (b.f_unwind ?? 0) +
     0.25 * (b.f_class ?? 0) +
     0.15 * (b.f_speed ?? 0) +
     0.1 * (b.f_restock ?? 0) +

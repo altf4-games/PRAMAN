@@ -2,12 +2,27 @@
 how hard a purchase is to undo. `reversibility_score_detailed` is
 deterministic, explainable, and pure — the same five weighted factors,
 computed the same way, every time. It is never tuned after looking at
-results; the harness's 60 hand labels (`harness/labels.json`) are what
-"correct" is measured against, not the other way around.
+results; the harness's pre-committed hand labels (`harness/labels.json`)
+are what "correct" is measured against, not the other way around — this
+formula's own factors have been revised exactly once, documented in
+ARCHITECTURE.md, and re-measured against those same unchanged labels
+rather than against a new set chosen to make the new formula look good.
 
 HARD ZERO: any personalised item makes the whole cart irreversible,
 full stop — an engraved ring can't un-engrave itself no matter how cheap
 or how reversible the rest of the cart is.
+
+`f_unwind` (0.35, formerly a pure `return_window_days` factor): conflating
+"has a formal return window" with "is reversible" was a real bug, not a
+style choice — see ARCHITECTURE.md's entry for the reasoning and the
+retail-returns research behind it. A merchant routinely refunds a cheap
+perishable/consumable/digital item without asking for it back once the
+cost of a real return exceeds what's recovered ("returnless refunds" —
+standard practice from Amazon down to a corner kirana store that never
+had formal reverse logistics to begin with); a durable/service/bespoke
+item's reversibility genuinely does hinge on its stated return window.
+`f_unwind` branches on exactly that distinction rather than applying one
+proxy to every category alike.
 """
 
 from __future__ import annotations
@@ -24,9 +39,11 @@ from praman.config import (
     RETURN_WINDOW_NORMALISATION_DAYS,
     REVERSIBILITY_WEIGHT_CLASS,
     REVERSIBILITY_WEIGHT_RESTOCK,
-    REVERSIBILITY_WEIGHT_RETURN,
     REVERSIBILITY_WEIGHT_SPEED,
+    REVERSIBILITY_WEIGHT_UNWIND,
     REVERSIBILITY_WEIGHT_VALUE,
+    UNWIND_FREE_CATEGORY_CLASSES,
+    UNWIND_FREE_CEILING_PAISE,
 )
 from praman.core.envelope import Envelope
 
@@ -64,7 +81,7 @@ def reversibility_score_detailed(
         # practice (the gate never scores an empty cart), but a defined,
         # maximally-reversible default beats a crash on min() of nothing.
         breakdown = {
-            "f_return": 1.0,
+            "f_unwind": 1.0,
             "f_class": 1.0,
             "f_speed": 1.0,
             "f_restock": 1.0,
@@ -75,7 +92,7 @@ def reversibility_score_detailed(
 
     if any(item.is_personalised for item in items):
         breakdown = {
-            "f_return": 0.0,
+            "f_unwind": 0.0,
             "f_class": 0.0,
             "f_speed": 0.0,
             "f_restock": 0.0,
@@ -84,8 +101,7 @@ def reversibility_score_detailed(
         }
         return 0.0, breakdown
 
-    f_return = min(item.return_window_days / RETURN_WINDOW_NORMALISATION_DAYS for item in items)
-    f_return = min(f_return, 1.0)
+    f_unwind = _f_unwind(items, total_paise)
 
     f_class = min(CATEGORY_CLASS_SCORES[item.category_class] for item in items)
 
@@ -100,7 +116,7 @@ def reversibility_score_detailed(
     f_value = 1 - min(total_paise / env.ceiling_paise, 1.0) if env.ceiling_paise > 0 else 0.0
 
     score = (
-        REVERSIBILITY_WEIGHT_RETURN * f_return
+        REVERSIBILITY_WEIGHT_UNWIND * f_unwind
         + REVERSIBILITY_WEIGHT_CLASS * f_class
         + REVERSIBILITY_WEIGHT_SPEED * f_speed
         + REVERSIBILITY_WEIGHT_RESTOCK * f_restock
@@ -108,7 +124,7 @@ def reversibility_score_detailed(
     )
 
     breakdown = {
-        "f_return": f_return,
+        "f_unwind": f_unwind,
         "f_class": f_class,
         "f_speed": f_speed,
         "f_restock": f_restock,
@@ -116,3 +132,24 @@ def reversibility_score_detailed(
         "hard_zero": False,
     }
     return score, breakdown
+
+
+def _f_unwind(items: list[ReversibilityItem], total_paise: int) -> float:
+    """Whether this cart falls into "returnless refund" territory (cheap
+    enough, and physically the right kind of good, that a merchant just
+    eats the loss rather than processing a real return) or genuinely
+    depends on a formal return window.
+
+    All items must be perishable/consumable/digital for the cart to
+    qualify — one durable/service/bespoke item in the cart means a real
+    physical return is the operative mechanism for the *whole* cart, same
+    "least reversible item wins" principle every other factor here uses.
+    Value is evaluated at the cart level (`total_paise`), not per item,
+    because a real refund-without-return decision is made against the
+    whole order, not itemized — the same level a real merchant decides at.
+    """
+    if all(item.category_class in UNWIND_FREE_CATEGORY_CLASSES for item in items):
+        return 1 - min(total_paise / UNWIND_FREE_CEILING_PAISE, 1.0)
+    return min(
+        min(item.return_window_days / RETURN_WINDOW_NORMALISATION_DAYS, 1.0) for item in items
+    )

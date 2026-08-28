@@ -53,10 +53,12 @@ def build_sessions() -> list[SessionSpec]:
     jewellery_bespoke_cycle = _cycle(JEWELLERY_BESPOKE_SKUS)
 
     # --- Benign green: 90. Small, everyday grocery purchases, well inside
-    # a generous weekly-budget envelope. Real seed data means many of
-    # these will actually score amber, not green (see ARCHITECTURE.md's
-    # "Finding from local testing") -- the harness reports whatever band
-    # the formula actually assigns, honestly, rather than forcing it.
+    # a generous weekly-budget envelope. The category name is aspirational,
+    # not asserted -- the harness reports whatever band the formula
+    # actually assigns, honestly, rather than forcing it. (An earlier
+    # version of the reversibility formula made green structurally
+    # unreachable for any grocery item regardless of price; see
+    # ARCHITECTURE.md's f_unwind entry for the fix.)
     for i in range(90):
         sku = next(grocery_cycle)
         qty = 1 + (i % 3)

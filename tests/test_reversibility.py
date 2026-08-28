@@ -99,16 +99,70 @@ def test_empty_cart_scores_maximally_reversible() -> None:
 # --- Per-factor computation ---
 
 
-def test_f_return_capped_at_one_for_long_return_windows() -> None:
-    item = _item(return_window_days=365)
-    _score, breakdown = reversibility_score_detailed([item], 1000, _envelope())
-    assert breakdown["f_return"] == 1.0
+# f_unwind: the "returnless refund" branch (perishable/consumable/digital) —
+# value-taper against UNWIND_FREE_CEILING_PAISE, independent of
+# return_window_days entirely.
 
 
-def test_f_return_zero_for_zero_day_return_window() -> None:
-    item = _item(return_window_days=0)
+def test_f_unwind_near_one_for_a_cheap_unwind_free_item() -> None:
+    item = _item(category_class="consumable", return_window_days=0)
+    _score, breakdown = reversibility_score_detailed([item], 18_000, _envelope())  # ₹180
+    assert breakdown["f_unwind"] == pytest.approx(0.82, abs=0.01)
+
+
+def test_f_unwind_zero_for_an_unwind_free_item_at_or_above_the_ceiling() -> None:
+    item = _item(category_class="perishable", return_window_days=0)
+    _score, breakdown = reversibility_score_detailed([item], 100_000, _envelope(1_000_000))
+    assert breakdown["f_unwind"] == 0.0
+
+
+def test_f_unwind_ignores_return_window_for_unwind_free_categories() -> None:
+    # A zero-day return window shouldn't matter at all here -- the whole
+    # point of the returnless-refund branch is that a formal return never
+    # happens for these categories at this value.
+    zero_window = _item(category_class="consumable", return_window_days=0)
+    long_window = _item(category_class="consumable", return_window_days=365)
+    _s1, b1 = reversibility_score_detailed([zero_window], 5_000, _envelope())
+    _s2, b2 = reversibility_score_detailed([long_window], 5_000, _envelope())
+    assert b1["f_unwind"] == b2["f_unwind"]
+
+
+# f_unwind: the traditional return-window branch (durable/service/bespoke).
+
+
+def test_f_unwind_capped_at_one_for_long_return_windows_on_a_durable_item() -> None:
+    item = _item(category_class="durable", return_window_days=365)
     _score, breakdown = reversibility_score_detailed([item], 1000, _envelope())
-    assert breakdown["f_return"] == 0.0
+    assert breakdown["f_unwind"] == 1.0
+
+
+def test_f_unwind_zero_for_zero_day_return_window_on_a_durable_item() -> None:
+    item = _item(category_class="durable", return_window_days=0)
+    _score, breakdown = reversibility_score_detailed([item], 1000, _envelope())
+    assert breakdown["f_unwind"] == 0.0
+
+
+def test_f_unwind_high_value_does_not_help_a_durable_item_with_a_short_window() -> None:
+    # Unlike the unwind-free branch, value doesn't buy leniency here --
+    # a durable good's reversibility genuinely depends on its return
+    # window, not on being cheap.
+    item = _item(category_class="durable", return_window_days=2)
+    _score, breakdown = reversibility_score_detailed([item], 100, _envelope(1_000_000))
+    assert breakdown["f_unwind"] == pytest.approx(2 / 14)
+
+
+def test_f_unwind_one_non_unwind_free_item_routes_the_whole_cart_to_the_return_window_branch() -> (
+    None
+):
+    cheap_consumable = _item(category_class="consumable", return_window_days=0)
+    durable = _item(category_class="durable", return_window_days=7)
+    _score, breakdown = reversibility_score_detailed(
+        [cheap_consumable, durable], 5_000, _envelope()
+    )
+    # Not the near-1.0 the consumable alone would get under the
+    # unwind-free branch -- the durable item's presence means the whole
+    # cart falls back to return-window semantics, MIN'd across items.
+    assert breakdown["f_unwind"] == pytest.approx(min(0 / 14, 7 / 14))
 
 
 def test_f_class_uses_category_class_lookup() -> None:
@@ -171,7 +225,7 @@ def test_multi_item_cart_takes_minimum_per_factor() -> None:
     )
     # every per-item factor must reflect the LESS reversible item
     assert breakdown["f_class"] == pytest.approx(0.55)  # durable, not perishable's 0.95
-    assert breakdown["f_return"] < 1.0
+    assert breakdown["f_unwind"] < 1.0
     assert score < 1.0
 
 
@@ -179,8 +233,9 @@ def test_multi_item_cart_takes_minimum_per_factor() -> None:
 
 
 def test_known_worked_example_matches_hand_calculation() -> None:
-    # consumable, 14-day return, 24h fulfilment, no restocking cost,
-    # cart is 10% of envelope ceiling.
+    # consumable (unwind-free-eligible), 24h fulfilment, no restocking
+    # cost, cart is ₹100 (10% of the unwind-free ceiling) and 10% of the
+    # envelope ceiling.
     item = _item(
         category_class="consumable",
         return_window_days=14,
@@ -189,9 +244,13 @@ def test_known_worked_example_matches_hand_calculation() -> None:
     )
     score, breakdown = reversibility_score_detailed([item], 10_000, _envelope(100_000))
 
+    expected_f_unwind = 1 - 10_000 / 100_000  # UNWIND_FREE_CEILING_PAISE
     expected_f_speed = 1 - 24 / 336
-    expected_score = 0.35 * 1.0 + 0.25 * 0.90 + 0.15 * expected_f_speed + 0.10 * 1.0 + 0.15 * 0.9
+    expected_score = (
+        0.35 * expected_f_unwind + 0.25 * 0.90 + 0.15 * expected_f_speed + 0.10 * 1.0 + 0.15 * 0.9
+    )
     assert score == pytest.approx(expected_score, rel=1e-9)
+    assert breakdown["f_unwind"] == pytest.approx(expected_f_unwind)
     assert breakdown["f_speed"] == pytest.approx(expected_f_speed)
     assert band(score) == "green"
 

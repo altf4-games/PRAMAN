@@ -29,17 +29,18 @@
   "substitution_offered_count": 11,
   "reversibility_band_accuracy": {
     "total": 64,
-    "matches": 39,
-    "accuracy": 0.609375,
+    "matches": 62,
+    "accuracy": 0.96875,
     "confusion": {
-      "green|amber": 25,
+      "green|green": 23,
+      "green|amber": 2,
       "amber|amber": 24,
       "red|red": 15
     }
   },
   "cooling_off": {
-    "held": 117,
-    "cancelled": 39,
+    "held": 30,
+    "cancelled": 10,
     "cancellation_rate": 0.3333333333333333
   },
   "dispute_pack_completeness": {
@@ -48,9 +49,9 @@
     "completeness": 1.0
   },
   "gate_latency_ms": {
-    "p50": 3.621457999543054,
-    "p95": 3.7359414018283132,
-    "mean": 3.0784200254838376
+    "p50": 3.6032500001965673,
+    "p95": 3.7572421999357175,
+    "mean": 3.0859162538299043
   },
   "injection_invariance": {
     "total": 15,

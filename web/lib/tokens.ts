@@ -50,7 +50,7 @@ export function bandFromScore(score: number): Band {
 }
 
 export const REVERSIBILITY_FACTORS = [
-  { key: "f_return", label: "Return window", weight: 0.35 },
+  { key: "f_unwind", label: "Unwind cost", weight: 0.35 },
   { key: "f_class", label: "Category class", weight: 0.25 },
   { key: "f_speed", label: "Fulfilment speed", weight: 0.15 },
   { key: "f_restock", label: "Restocking cost", weight: 0.1 },

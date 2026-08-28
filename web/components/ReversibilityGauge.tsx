@@ -12,7 +12,7 @@ import {
 export interface ReversibilityGaugeProps {
   /** 0..1, as returned by `reversibility_score_detailed`. */
   score: number;
-  /** The five named factors — f_return, f_class, f_speed, f_restock, f_value.
+  /** The five named factors — f_unwind, f_class, f_speed, f_restock, f_value.
    * Values are the raw per-factor score (0..1), not yet weighted; this
    * component applies the weight to size each segment. */
   breakdown: Record<string, number>;
