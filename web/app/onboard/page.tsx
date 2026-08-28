@@ -143,7 +143,7 @@ export default function OnboardPage() {
           {merchants.length === 0 && <option value="">No shops yet</option>}
           {merchants.map((m) => (
             <option key={m.id} value={m.id}>
-              {m.whatsapp_number} — {m.onboarding_state}
+              {m.name} — {m.onboarding_state}
             </option>
           ))}
         </select>

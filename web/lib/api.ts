@@ -222,6 +222,7 @@ export interface MetricsOut {
   orders_by_status: Record<string, number>;
   orders_by_band: Record<string, number>;
   disputes_resolvable: number;
+  escalations_ever: number;
 }
 
 // --- calls ---

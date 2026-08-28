@@ -316,3 +316,10 @@ class MetricsOut(BaseModel):
     orders_by_status: dict[str, int]
     orders_by_band: dict[str, int]
     disputes_resolvable: int
+    # Cumulative count of every R08/R11 ESCALATE decision this gate has
+    # ever made, distinct from `orders_by_status["pending_approval"]`
+    # (a live snapshot of what's *currently* awaiting a merchant, which
+    # reads as zero the moment every past escalation has been resolved —
+    # a real clarity gap found live: a resolved escalation reading as
+    # "escalation never happened" to a first-time viewer).
+    escalations_ever: int

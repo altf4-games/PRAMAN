@@ -87,9 +87,17 @@ export default function LivePage() {
   // run started. Filtered here rather than widening LedgerStream to
   // tolerate non-ledger payloads it was never meant to render.
   const events = rawEvents.filter((e) => typeof e.payload.chain_hash === "string");
-  const { events: agentEvents, connected: agentConnected } = useLedgerStream(
+  const { events: rawAgentEvents, connected: agentConnected } = useLedgerStream(
     agentRunId ? `agent:${agentRunId}` : null,
   );
+  // Same unfiltered-bus issue as `events` above, but for the agent trace
+  // panel: before a run starts (agentRunId is null), this hook subscribes
+  // to the *entire* bus, so onboarding events from a completely unrelated
+  // session showed up here as bare, confusing rows (AgentTrace's default
+  // case renders any unrecognised event_type literally rather than
+  // crashing, which is why this one was silent rather than fatal — but
+  // still wrong to show). Filtered to this panel's own event types.
+  const agentEvents = rawAgentEvents.filter((e) => e.event_type.startsWith("AGENT_"));
 
   // The agent's own tool results are the only place a cart's reversibility
   // band/score/breakdown and the checkout decision are known in Agent mode

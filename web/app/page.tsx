@@ -65,10 +65,7 @@ export default async function HomePage() {
             <Metric label="Sessions gated" value={metrics.sessions_gated} />
             <Metric label="Orders captured" value={metrics.orders_by_status["captured"] ?? 0} />
             <Metric label="Disputes resolvable" value={metrics.disputes_resolvable} />
-            <Metric
-              label="Escalated to a human"
-              value={metrics.orders_by_status["pending_approval"] ?? 0}
-            />
+            <Metric label="Escalated to a human" value={metrics.escalations_ever} />
           </dl>
         ) : (
           <p className="text-sm text-ink-muted">

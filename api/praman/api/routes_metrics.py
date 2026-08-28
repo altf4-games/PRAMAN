@@ -38,9 +38,20 @@ async def metrics(session: DbSession) -> MetricsOut:
     disputes_result = await session.execute(select(func.count(Order.id)))
     disputes_resolvable = disputes_result.scalar_one()
 
+    # Cumulative, not a live snapshot -- see MetricsOut.escalations_ever's
+    # own docstring for why `orders_by_status["pending_approval"]` alone
+    # is a misleading stat to lead with.
+    escalations_result = await session.execute(
+        select(func.count(func.distinct(GateDecision.session_id))).where(
+            GateDecision.decision == "ESCALATE"
+        )
+    )
+    escalations_ever = escalations_result.scalar_one()
+
     return MetricsOut(
         sessions_gated=sessions_gated,
         orders_by_status=orders_by_status,
         orders_by_band=orders_by_band,
         disputes_resolvable=disputes_resolvable,
+        escalations_ever=escalations_ever,
     )

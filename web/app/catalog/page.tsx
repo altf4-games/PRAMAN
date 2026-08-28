@@ -44,7 +44,7 @@ export default function CatalogPage() {
       <p className="text-ink-muted max-w-2xl mb-6">
         Every product a low-confidence extraction flagged for a merchant to confirm — never
         exposed to a shopping agent until it&apos;s cleared. Confirming happens over WhatsApp
-        (the design spec&apos;s onboarding flow); this page mirrors the queue read-only.
+        or Telegram during onboarding; this page mirrors the queue read-only.
       </p>
 
       <div className="mb-6">
