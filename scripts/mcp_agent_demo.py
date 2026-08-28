@@ -197,9 +197,18 @@ async def buy(
     print(f"reason_code   = {checkout['reason_code']}")
     print(f"detail        = {checkout['detail']}")
     if checkout.get("order_id"):
-        dispute_url = api_url.replace("praman-production.up.railway.app", "praman-jet.vercel.app")
-        print(f"order_id      = {checkout['order_id']}  ({checkout.get('order_status')})")
-        print(f"dispute pack  = {dispute_url}/dispute/{checkout['order_id']}")
+        order_id = checkout["order_id"]
+        order_status = checkout.get("order_status")
+        frontend_url = api_url.replace("praman-production.up.railway.app", "praman-jet.vercel.app")
+        print(f"order_id      = {order_id}  ({order_status})")
+        if order_status in ("awaiting_payment", "awaiting_payment_amber"):
+            # No page in the app shows a "pay" button for an order it
+            # didn't itself create -- /live's own button only works for a
+            # cart built in that same browser session. /pay/[orderId]
+            # exists specifically so an order created here, from a
+            # terminal, has somewhere to complete a real payment.
+            print(f"pay this order = {frontend_url}/pay/{order_id}")
+        print(f"dispute pack  = {frontend_url}/dispute/{order_id}")
 
 
 def main() -> None:

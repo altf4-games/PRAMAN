@@ -8,6 +8,7 @@ import { ReversibilityGauge } from "@/components/ReversibilityGauge";
 import { LedgerStream } from "@/components/LedgerStream";
 import { AgentTrace } from "@/components/AgentTrace";
 import { BandSeal } from "@/components/BandSeal";
+import { openRazorpayCheckout } from "@/lib/razorpayCheckout";
 
 interface ToolCall {
   label: string;
@@ -29,28 +30,6 @@ type CheckoutResult = {
   order_id: string | null;
   order_status: string | null;
 };
-
-declare global {
-  interface Window {
-    Razorpay?: new (options: Record<string, unknown>) => { open: () => void };
-  }
-}
-
-/** Loads Razorpay's hosted Checkout.js once and reuses it — the real
- * capture path for this test account, since server-to-server test-card
- * capture isn't enabled on it (confirmed against the live API): a real
- * Razorpay Order exists the moment the gate ALLOWs/HOLDs, but a real
- * Payment only exists once this widget's card form actually runs. */
-function loadRazorpayCheckout(): Promise<void> {
-  if (window.Razorpay) return Promise.resolve();
-  return new Promise((resolve, reject) => {
-    const script = document.createElement("script");
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error("failed to load Razorpay Checkout.js"));
-    document.body.appendChild(script);
-  });
-}
 
 export default function LivePage() {
   const [merchants, setMerchants] = useState<MerchantOut[]>([]);
@@ -295,35 +274,13 @@ export default function LivePage() {
       if (!order.razorpay_order_id || !order.amount_paise || !order.razorpay_key_id) {
         throw new Error("order is missing real-checkout details");
       }
-      await loadRazorpayCheckout();
-      if (!window.Razorpay) throw new Error("Razorpay Checkout.js did not load");
-
-      await new Promise<void>((resolve, reject) => {
-        const rzp = new window.Razorpay!({
-          key: order.razorpay_key_id,
-          order_id: order.razorpay_order_id,
-          amount: order.amount_paise,
-          currency: "INR",
-          name: "PRAMAN",
-          description: `cart ${order.cart_id}`,
-          prefill: { contact: "9999999999", email: "checkout@praman.dev" },
-          theme: { color: "#141A22" },
-          handler: async (response: {
-            razorpay_order_id: string;
-            razorpay_payment_id: string;
-            razorpay_signature: string;
-          }) => {
-            try {
-              await api.checkoutConfirm(checkout.order_id!, response);
-              resolve();
-            } catch (err) {
-              reject(err instanceof Error ? err : new Error(String(err)));
-            }
-          },
-          modal: { ondismiss: () => reject(new Error("checkout dismissed")) },
-        });
-        rzp.open();
+      const response = await openRazorpayCheckout({
+        razorpay_order_id: order.razorpay_order_id,
+        amount_paise: order.amount_paise,
+        cart_id: order.cart_id,
+        razorpay_key_id: order.razorpay_key_id,
       });
+      await api.checkoutConfirm(checkout.order_id, response);
 
       const status = await api.orderStatus(checkout.order_id);
       setCheckout((prev) => (prev ? { ...prev, order_status: status.status } : prev));
