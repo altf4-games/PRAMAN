@@ -79,7 +79,8 @@ export default function ApprovalsPage() {
       <h1 className="font-display text-3xl mb-2">Merchant approvals</h1>
       <p className="text-ink-muted max-w-2xl mb-6">
         Every order the gate escalated (R08 reversibility or R11 trust-tier ceiling), waiting
-        on a human. Deciding here or replying on WhatsApp produce the identical outcome.
+        on a human. Deciding here or replying on the merchant&rsquo;s own chat (WhatsApp or
+        Telegram) produce the identical outcome.
       </p>
 
       <div className="mb-6">

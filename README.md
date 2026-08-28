@@ -68,7 +68,7 @@ uvicorn praman.main:app --reload
 ```
 
 ```bash
-pytest -q            # 293 tests
+pytest -q            # 312 tests
 ruff check api tests scripts && mypy api/praman
 ```
 
@@ -86,6 +86,20 @@ Harness (200 synthetic sessions, two arms, regenerates `harness/RESULTS.md`):
 ```bash
 python -m harness.run
 ```
+
+A genuine external MCP client buying something for real, against the
+deployed storefront — the same signed protocol any third-party agent
+(Claude, or anything else speaking MCP) has to use, not a bespoke demo
+integration:
+
+```bash
+python scripts/mcp_agent_demo.py \
+  --merchant-id <merchant_id> --goal "1kg toor dal" --budget-paise 50000
+```
+
+It prints a `/pay/{order_id}` link the moment checkout needs a real
+Razorpay Checkout.js round-trip to capture payment (see §9), and a
+`/dispute/{order_id}` link once the order exists either way.
 
 ## 5. Results
 
@@ -271,7 +285,23 @@ The full log — every ambiguous call, the option taken, and why — lives in
   outbound freeform replies (`400 ContentSid Required` without an approved
   Content Template). `RealTwilioClient.send_text` works as written and
   would start working the moment the account is upgraded — nothing in the
-  adapter changes. Every automated test uses `FakeWhatsAppClient`.
+  adapter changes.
+- **Telegram, as a second real channel — not a demo shortcut.** Found live,
+  not anticipated in the original spec: this Twilio trial account can't
+  send outbound freeform text or fetch inbound media at all, which would
+  have silently killed the merchant-approval and buyer-undo messages that
+  are half the pitch. Rather than fake those over a fixed channel, both the
+  API and the scheduler now dispatch through `MultiChannelClient`
+  (`whatsapp/client.py`), which routes any address by its `telegram:` /
+  `whatsapp:` prefix to a real `TelegramClient` or `RealTwilioClient` —
+  same `WhatsAppClient` Protocol either way, so no onboarding/approval/
+  cooling-off business logic branches on which channel a buyer or merchant
+  is on. Telegram's Bot API has no approval-gate equivalent to Twilio's
+  Content Template review, so freeform replies and media both work
+  immediately on a brand-new bot token — merchant Approve/Decline and buyer
+  undo are demoed live over Telegram for that reason, not because WhatsApp
+  itself doesn't work. Every automated test uses `FakeWhatsAppClient`
+  regardless of channel.
 - **`harness/labels.json`'s hand labels:** AI-reasoned, not
   human-reviewed. `scripts/gen_labels.py` never calls
   `reversibility_score_detailed`, so the labels aren't circularly derived
@@ -315,16 +345,16 @@ api/praman/
   core/            gate.py, envelope.py, reversibility.py, checkout.py, ledger.py — the money path
   adapters/        razorpay_client.py, llm.py — Real/Fake pairs behind a Protocol
   ingest/          extract.py (VLM), normalise.py (deterministic)
-  whatsapp/        onboarding.py, approvals.py, cooling_off_notify.py
+  whatsapp/        onboarding.py, approvals.py, cooling_off_notify.py, client.py (MultiChannelClient), telegram_client.py
   api/             routes_*.py — the REST surface
   mcp/server.py    thin wrappers over the same REST routes
   crypto/          canonical.py (JCS), keys.py (Ed25519), did.py
 web/
-  app/             /, /onboard, /live, /catalog, /approvals, /dispute/[orderId], /metrics
-  components/      ReversibilityGauge.tsx, LedgerStream.tsx, GateTrail.tsx
+  app/             /, /onboard, /live, /catalog, /approvals, /dispute/[orderId], /pay/[orderId], /metrics
+  components/      ReversibilityGauge.tsx, LedgerStream.tsx, GateTrail.tsx, AgentTrace.tsx
 harness/           simulator.py, sessions.py, injection_corpus.py, report.py, run.py
-tests/             293 tests, heaviest on gate/envelope/reversibility/checkout
-scripts/           spike_razorpay.py, gen_labels.py, gen_seed_images.py
+tests/             312 tests, heaviest on gate/envelope/reversibility/checkout
+scripts/           spike_razorpay.py, gen_labels.py, gen_seed_images.py, mcp_agent_demo.py
 ARCHITECTURE.md    full system design + every design decision's tradeoff
 harness/RESULTS.md generated harness output — the numbers in §5
 ```
