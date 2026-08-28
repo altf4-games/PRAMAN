@@ -37,7 +37,13 @@ export default function LivePage() {
   const [products, setProducts] = useState<ProductOut[]>([]);
   const [productId, setProductId] = useState<string>("");
   const [ceiling, setCeiling] = useState(500_000);
-  const [minReversibility, setMinReversibility] = useState(0);
+  // R08 escalates a cart only when its score is below the envelope's own
+  // min_reversibility -- a real thing to know before demoing: a min of 0
+  // (the old default here) means R08 can never fire, so even a
+  // bespoke/personalised item ALLOWs instead of escalating. 0.4 (the
+  // amber threshold) is a sane non-zero default so a red-band item
+  // demos correctly without the presenter having to remember to raise it.
+  const [minReversibility, setMinReversibility] = useState(0.4);
 
   const [mode, setMode] = useState<"scripted" | "agent">("agent");
   const [goal, setGoal] = useState("Buy 1kg toor dal");

@@ -98,6 +98,7 @@ async def buy(
     goal: str,
     budget_paise: int,
     qty: int,
+    min_reversibility: float,
 ) -> None:
     print(f"Goal: {goal!r}  |  budget: ₹{budget_paise / 100:.2f}  |  merchant: {merchant_id}")
 
@@ -151,7 +152,7 @@ async def buy(
                     "ceiling_paise": budget_paise,
                     "max_single_txn_paise": budget_paise,
                     "allowed_categories": [product["category"]],
-                    "min_reversibility": 0.0,
+                    "min_reversibility": min_reversibility,
                     "valid_hours": 1,
                 },
             )
@@ -218,6 +219,12 @@ def main() -> None:
     parser.add_argument("--goal", required=True, help='e.g. "1kg toor dal"')
     parser.add_argument("--budget-paise", type=int, default=50_000)
     parser.add_argument("--qty", type=int, default=1)
+    parser.add_argument(
+        "--min-reversibility",
+        type=float,
+        default=0.0,
+        help="R08 only escalates below this -- 0 means a red-band item still ALLOWs",
+    )
     args = parser.parse_args()
 
     asyncio.run(
@@ -227,6 +234,7 @@ def main() -> None:
             goal=args.goal,
             budget_paise=args.budget_paise,
             qty=args.qty,
+            min_reversibility=args.min_reversibility,
         )
     )
 
