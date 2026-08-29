@@ -14,6 +14,7 @@ from datetime import datetime, timedelta
 from redis.asyncio import Redis
 
 from praman.config import (
+    QUOTE_TTL_BESPOKE_DEMO_MODE_S,
     QUOTE_TTL_BESPOKE_S,
     QUOTE_TTL_DEMO_MODE_S,
     QUOTE_TTL_DURABLE_S,
@@ -28,6 +29,13 @@ _PERISHABLE_CONSUMABLE_CLASSES = {"perishable", "consumable"}
 
 def quote_ttl_seconds(category_class: str, *, demo_mode: bool = False) -> int:
     if demo_mode:
+        # Bespoke is the exception: it's the class that drives R08
+        # merchant-approval escalation, and a human needs real time to see
+        # the message and tap Approve (MERCHANT_APPROVAL_TIMEOUT_S gives
+        # them 15 minutes) -- flattening it to the same 30s as everything
+        # else made the approval flow structurally unable to succeed.
+        if category_class == "bespoke":
+            return QUOTE_TTL_BESPOKE_DEMO_MODE_S
         return QUOTE_TTL_DEMO_MODE_S
     if category_class in _PERISHABLE_CONSUMABLE_CLASSES:
         return QUOTE_TTL_PERISHABLE_CONSUMABLE_S

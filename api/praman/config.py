@@ -55,6 +55,15 @@ QUOTE_TTL_PERISHABLE_CONSUMABLE_S = 60
 QUOTE_TTL_DURABLE_S = 600
 QUOTE_TTL_BESPOKE_S = 900
 QUOTE_TTL_DEMO_MODE_S = 30
+# Bespoke items are the ones that trigger R08 merchant-approval escalation
+# (hard-zero reversibility), and a real human needs real time to see the
+# WhatsApp/Telegram message and tap Approve -- MERCHANT_APPROVAL_TIMEOUT_S
+# below gives them 15 minutes for exactly that reason. Flattening every
+# class's demo-mode TTL to 30s (the plain QUOTE_TTL_DEMO_MODE_S) silently
+# broke that: the quote is dead long before a human can react, so R05
+# (QUOTE_EXPIRED) fires on the gate re-run and the approval can never
+# actually succeed. Found live -- a real approved order still got BLOCKed.
+QUOTE_TTL_BESPOKE_DEMO_MODE_S = 5 * 60
 
 COOLING_OFF_WINDOW_S = 30 * 60
 COOLING_OFF_WINDOW_DEMO_MODE_S = 60

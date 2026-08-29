@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 import fakeredis.aioredis
 import pytest
 from praman.config import (
+    QUOTE_TTL_BESPOKE_DEMO_MODE_S,
     QUOTE_TTL_BESPOKE_S,
     QUOTE_TTL_DEMO_MODE_S,
     QUOTE_TTL_DURABLE_S,
@@ -45,9 +46,20 @@ def test_ttl_durable() -> None:
     assert quote_ttl_seconds("durable") == QUOTE_TTL_DURABLE_S
 
 
-def test_ttl_demo_mode_overrides_everything() -> None:
-    assert quote_ttl_seconds("bespoke", demo_mode=True) == QUOTE_TTL_DEMO_MODE_S
+def test_ttl_demo_mode_overrides_most_classes() -> None:
     assert quote_ttl_seconds("perishable", demo_mode=True) == QUOTE_TTL_DEMO_MODE_S
+    assert quote_ttl_seconds("durable", demo_mode=True) == QUOTE_TTL_DEMO_MODE_S
+
+
+def test_ttl_demo_mode_gives_bespoke_room_for_a_real_human_approval() -> None:
+    # Regression test: flattening bespoke to the same 30s as everything else
+    # made R08 merchant-approval escalation structurally unable to succeed
+    # in demo mode, since a human can't see a WhatsApp/Telegram message and
+    # tap Approve inside 30 seconds -- the quote (and its stock hold) was
+    # always expired (R05 QUOTE_EXPIRED) by the time the gate re-ran. Found
+    # live: a real, approved order still got BLOCKed for exactly this reason.
+    assert quote_ttl_seconds("bespoke", demo_mode=True) == QUOTE_TTL_BESPOKE_DEMO_MODE_S
+    assert QUOTE_TTL_BESPOKE_DEMO_MODE_S > QUOTE_TTL_DEMO_MODE_S
 
 
 # --- stock holds ---
