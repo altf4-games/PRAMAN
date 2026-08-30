@@ -4,7 +4,28 @@
 that lets AI shopping agents transact on Razorpay rails — and lets the merchant prove
 afterwards exactly what the agent was allowed to do.
 
-- **In 60 seconds:** [`/live`](https://praman-jet.vercel.app/live) runs a real MCP agent against a seeded shop, streaming gate decisions into a hash-chained ledger. Break a ledger row from that page and watch the chain proof fail.
+[![Demo](https://img.shields.io/badge/demo-praman--jet.vercel.app-141A22)](https://praman-jet.vercel.app)
+[![API](https://img.shields.io/badge/API-praman--production.up.railway.app-141A22)](https://praman-production.up.railway.app)
+
+
+**In 60 seconds:** [`/live`](https://praman-jet.vercel.app/live) runs a real MCP agent
+against a seeded shop, streaming gate decisions into a hash-chained ledger. Break a ledger
+row from that page and watch the chain proof fail.
+
+---
+
+### Contents
+
+1. [The problem](#1-the-problem)
+2. [What it does](#2-what-it-does)
+3. [Quickstart](#3-quickstart)
+4. [Results](#4-results)
+5. [The Reversibility Ladder](#5-the-reversibility-ladder)
+6. [Threat model](#6-threat-model)
+7. [Design decisions](#7-design-decisions)
+8. [What's real vs mocked](#8-whats-real-vs-mocked)
+9. [Limitations](#9-limitations)
+10. [Repo map](#10-repo-map)
 
 ---
 
@@ -16,10 +37,12 @@ the dispute and the refund**. Nobody made the merchant able to *prove* what the 
 authorized to do. A kirana or jewellery merchant has no artifact that an arbitrator,
 platform, or customer will accept as "I never approved this."
 
-PRAMAN gives that merchant three things: a signed storefront any agent can transact
-against, a policy gate that scales autonomy inversely with how reversible a purchase is,
-and a hash-chained ledger that exports as a one-click dispute pack — evidence captured at
-authorization time, not reconstructed afterwards.
+PRAMAN gives that merchant three things:
+
+- a **signed storefront** any agent can transact against
+- a **policy gate** that scales autonomy inversely with how reversible a purchase is
+- a **hash-chained ledger** that exports as a one-click dispute pack — evidence captured
+  at authorization time, not reconstructed afterwards
 
 ## 2. What it does
 
@@ -30,9 +53,13 @@ signed quotes, and checks out through a 12-rule gate that **never runs an LLM in
 path**.
 
 A **Reversibility Ladder** score — five deterministic weighted factors — decides how much
-friction the purchase gets: full autonomy (green), a buyer cooling-off window with one-tap
-undo (amber), or a merchant Approve/Decline (red). Every decision, ALLOW included, is
-appended to a ledger that verifies end to end.
+friction the purchase gets:
+
+- 🟢 **Green** — full autonomy, zero friction
+- 🟡 **Amber** — buyer cooling-off window, one-tap undo
+- 🔴 **Red** — merchant Approve/Decline required
+
+Every decision, ALLOW included, is appended to a ledger that verifies end to end.
 
 ```
 WhatsApp photos → VLM extraction → confidence-gated catalog → LIVE storefront
@@ -142,10 +169,12 @@ shipping, labour and restocking are counted. Return window measures whether a *f
 return exists, not whether a purchase is hard to unwind. Durable goods don't get that
 leniency: a real return actually happens there, so the window really is the signal.
 
-`≥0.75` green (full autonomy) · `≥0.40` amber (dispatch withheld, one-tap undo) · below
-that red (merchant approval required). The 64 hand labels in `harness/labels.json` were
-committed **before** the harness ever ran against them; weights were never adjusted after
-seeing accuracy.
+- `≥0.75` → 🟢 **green** (full autonomy)
+- `≥0.40` → 🟡 **amber** (dispatch withheld, one-tap undo)
+- below that → 🔴 **red** (merchant approval required)
+
+The 64 hand labels in `harness/labels.json` were committed **before** the harness ever ran
+against them; weights were never adjusted after seeing accuracy.
 
 ## 6. Threat model
 
