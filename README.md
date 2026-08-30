@@ -1,360 +1,250 @@
 # PRAMAN
 
-## 1. The problem, in 5 lines
+**Evidence by construction for agentic commerce.** A merchant-side authorization layer
+that lets AI shopping agents transact on Razorpay rails — and lets the merchant prove
+afterwards exactly what the agent was allowed to do.
 
-AI shopping agents can now pay — Razorpay itself has said so, publicly, and
-by its own account holds the *merchant* responsible for the dispute and the
-refund when an agent buys the wrong thing. Nobody made the merchant able to
-**prove** what the agent was authorized to do. A kirana or jewellery
-merchant has no way to say "I never approved this" that an arbitrator, a
-platform, or a customer will accept. PRAMAN gives a merchant a signed
-storefront any agent can transact against, a policy gate that scales
-autonomy inversely with how reversible a purchase is, and a hash-chained
-ledger that exports as a one-click dispute pack — evidence captured at the
-moment of authorization, not reconstructed after the fact.
+- **In 60 seconds:** [`/live`](https://praman-jet.vercel.app/live) runs a real MCP agent against a seeded shop, streaming gate decisions into a hash-chained ledger. Break a ledger row from that page and watch the chain proof fail.
 
-## 2. What this is
+---
 
-A kirana owner sends photos of a handwritten price list over WhatsApp.
-Minutes later the shop is a signed, agent-readable storefront. An AI
-shopping agent registers, gets a one-time-consent Intent Envelope (modelled
-on UPI Reserve Pay, not a card-on-file), requests signed quotes, and
-checks out through a policy gate (`R01`-`R12`) that never runs an LLM in
-the money path. A purchase's **Reversibility Ladder** score — five
-deterministic, weighted factors — decides how much friction it gets:
-full autonomy (green), a buyer cooling-off window with a WhatsApp one-tap
-undo (amber), or a merchant WhatsApp Approve/Decline (red). Every gate
-decision, ALLOW included, is appended to a hash-chained ledger that
-verifies end to end and exports as a signed, PDF-able dispute pack.
+## 1. The problem
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the full system diagram, data
-model, and the design decisions made along the way (each one recorded with
-its tradeoff, not just its outcome).
+AI shopping agents can now pay. Razorpay has said publicly that agentic shopping doesn't
+rewrite commercial liability — when an agent buys the wrong thing, **the merchant handles
+the dispute and the refund**. Nobody made the merchant able to *prove* what the agent was
+authorized to do. A kirana or jewellery merchant has no artifact that an arbitrator,
+platform, or customer will accept as "I never approved this."
+
+PRAMAN gives that merchant three things: a signed storefront any agent can transact
+against, a policy gate that scales autonomy inversely with how reversible a purchase is,
+and a hash-chained ledger that exports as a one-click dispute pack — evidence captured at
+authorization time, not reconstructed afterwards.
+
+## 2. What it does
+
+A kirana owner sends photos of a handwritten price list over WhatsApp. Minutes later the
+shop is a signed, agent-readable storefront. An agent registers, receives a one-time-
+consent **Intent Envelope** (modelled on UPI Reserve Pay, not a card-on-file), requests
+signed quotes, and checks out through a 12-rule gate that **never runs an LLM in the money
+path**.
+
+A **Reversibility Ladder** score — five deterministic weighted factors — decides how much
+friction the purchase gets: full autonomy (green), a buyer cooling-off window with one-tap
+undo (amber), or a merchant Approve/Decline (red). Every decision, ALLOW included, is
+appended to a ledger that verifies end to end.
 
 ```
 WhatsApp photos → VLM extraction → confidence-gated catalog → LIVE storefront
-                                                                      │
-Agent → Registry → Envelope → Quote → Cart → ┌─── R01-R12 Gate ───┐  │
-                                              │  Reversibility     │◄─┘
-                                              │  Ladder (green/    │
-                                              │  amber/red)        │
-                                              └──────┬──────┬──────┘
-                                     ALLOW/HOLD ──────┘      └── ESCALATE
-                                          │                        │
-                              Razorpay TEST MODE order      Merchant WhatsApp
-                              (real order; real payment      Approve/Decline
-                               needs a Checkout.js round-           │
-                               trip — see §9)                       ▼
-                                          │                   gate re-runs
-                                          ▼                     from R01
-                              Hash-chained ledger ──► Dispute Pack (JSON/PDF)
+                                                                     │
+Agent → Registry → Envelope → Quote → Cart → ┌── R01–R12 Gate ──┐   │
+                                             │ Reversibility     │◄──┘
+                                             │ Ladder            │
+                                             └───┬───────────┬───┘
+                                    ALLOW/HOLD ──┘           └── ESCALATE
+                                         │                        │
+                            Razorpay TEST MODE order      Merchant Approve/Decline
+                                         │                        │
+                                         ▼                   gate re-runs from R01
+                            Hash-chained ledger ──► Dispute Pack (JSON/PDF)
 ```
 
-## 3. Live demo
+Full system design and every design decision's tradeoff: [ARCHITECTURE.md](ARCHITECTURE.md).
 
-- **Frontend:** [praman-jet.vercel.app](https://praman-jet.vercel.app) (Vercel)
-- **API:** [praman-production.up.railway.app](https://praman-production.up.railway.app)
-  (Railway, backed by Neon Postgres and Redis Cloud)
-- **Video:** not yet recorded — see the project schedule in `ARCHITECTURE.md`.
-
-## 4. Quickstart
+## 3. Quickstart
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-cp .env.example .env   # fill in your own TEST MODE Razorpay keys
+cp .env.example .env          # your own TEST MODE Razorpay keys
 alembic upgrade head
 uvicorn praman.main:app --reload
+
+pytest -q                     # 312 tests
+python -m harness.run         # 200 sessions, two arms → harness/RESULTS.md
 ```
+
+A real external MCP client buying against the deployed storefront — the same signed
+protocol any third-party agent must use, not a bespoke integration:
 
 ```bash
-pytest -q            # 312 tests
-ruff check api tests scripts && mypy api/praman
+python scripts/mcp_agent_demo.py --merchant-id <id> --goal "1kg toor dal" --budget-paise 50000
 ```
 
-Frontend:
+It prints a `/pay/{order_id}` link when checkout needs a real Razorpay Checkout.js
+round-trip to capture payment, and a `/dispute/{order_id}` link once the order exists.
 
-```bash
-cd web
-cp .env.example .env.local   # point NEXT_PUBLIC_API_URL at your running API
-npm install
-npm run dev
-```
+Frontend setup in [`web/README.md`](web/README.md).
 
-Harness (200 synthetic sessions, two arms, regenerates `harness/RESULTS.md`):
+## 4. Results
 
-```bash
-python -m harness.run
-```
-
-A genuine external MCP client buying something for real, against the
-deployed storefront — the same signed protocol any third-party agent
-(Claude, or anything else speaking MCP) has to use, not a bespoke demo
-integration:
-
-```bash
-python scripts/mcp_agent_demo.py \
-  --merchant-id <merchant_id> --goal "1kg toor dal" --budget-paise 50000
-```
-
-It prints a `/pay/{order_id}` link the moment checkout needs a real
-Razorpay Checkout.js round-trip to capture payment (see §9), and a
-`/dispute/{order_id}` link once the order exists either way.
-
-## 5. Results
-
-Full numbers, methodology, and the "what this run doesn't cover" section
-live in [harness/RESULTS.md](harness/RESULTS.md) — generated by
-`harness/run.py`, 200 sessions across seven categories (benign, stale-quote
-race, envelope escape, prompt injection, replay, identity spoof), run
-through **Arm A** (naive: unsigned reads, no envelope, no gate, direct
-checkout) and **Arm B** (PRAMAN: the full R01-R12 gate) against the same
-seeded catalog. Headline numbers, reported as measured — nothing tuned
-after seeing them:
+200 sessions across seven classes (benign, stale-quote race, envelope escape, prompt
+injection, replay, identity spoof), run through **Arm A** (naive: unsigned reads, no
+envelope, no gate) and **Arm B** (full R01–R12 gate) against the same seeded catalog.
+Methodology and caveats: [harness/RESULTS.md](harness/RESULTS.md).
 
 | Metric | Arm A (naive) | Arm B (PRAMAN) |
 |---|---|---|
-| Net GMV captured | ₹18,63,159.00 | ₹6,93,645.00 |
-| Bad transactions stopped | 0 / 65 | **65 / 65** |
-| Bad-transaction value exposed | ₹10,02,514.00 | ₹0.00 |
-| Gate precision / recall (adversarial split) | — | 100.0% / 100.0% |
-| False-positive cost (legitimate GMV wrongly blocked) | — | **₹0.00** |
-| Injection-invariance (byte-identical decision with/without injected text) | — | 15/15 (100%) |
-| Dispute-pack completeness | — | 132/132 (100%) |
-| Gate latency (p50 / p95) | — | 3.60ms / 3.76ms |
-| Reversibility band accuracy (§6) | — | **62/64 (96.9%)** |
+| Net GMV captured | ₹18,63,159 | ₹6,93,645 |
+| Bad-transaction value exposed | ₹10,02,514 | **₹0** |
+| Bad transactions stopped | 0 / 65 | 65 / 65 |
+| Legitimate GMV **wrongly blocked** | — | **₹0** |
+| Legitimate GMV **pending human approval** at measurement | — | ₹1,67,000 (2 sessions) |
+| Gate precision / recall (adversarial split) | — | 100% / 100% |
+| Injection-invariance | — | 15/15 |
+| Dispute-pack completeness | — | 132/132 |
+| Gate latency p50 / p95 | — | 3.60ms / 3.76ms |
+| Reversibility band accuracy | — | 62/64 (96.9%) |
 
-**A number that used to be embarrassing, and the honest story behind why
-it isn't anymore:** reversibility-band accuracy against the 64
-pre-committed hand labels started at **39/64 (60.9%)** — no grocery SKU in
-either seed catalog could score green under the original formula, full
-stop, because it measured `return_window_days` as a proxy for
-reversibility, and perishable groceries structurally can't have long
-return windows. Researching *why* real merchants handle cheap-item
-returns (see §6) exposed the actual bug: return window isn't the same
-thing as reversibility. The fix — `f_unwind`, replacing that proxy with a
-factor modelling "can the merchant make the customer whole cheaply,"
-grounded in real retail-returns economics — was re-measured against the
-exact same 64 labels, unchanged, and moved accuracy to 62/64 (96.9%). The
-two remaining misses are both large-quantity grocery carts that correctly
-(per that same economics) no longer qualify for the cheap-item leniency.
-Full reasoning, sources, and both measurements are in
-`ARCHITECTURE.md`'s reversibility-formula entries — the point isn't that
-the number went up, it's that it went up without touching the labels.
+**Read the perfect scores narrowly.** The adversarial sessions are generated by this
+repository, so each attack class is constructed to be exactly what a rule checks for — a
+replay session reuses the same nonce on both attempts by construction, and R12 catches it
+by construction. **This measures correct implementation against a known threat model, not
+detection capability against novel attacks.** A real evaluation would need adversarial
+sessions authored independently of the gate. Treating 100%/100% as evidence of robustness
+would be wrong, and it isn't claimed.
 
-## 6. The Reversibility Ladder
+**The "pending approval" number is two real carts, not a category of friction.** Arm B
+captured no legitimate GMV wrongly — but two benign red-band jewellery carts (₹85,000 and
+₹82,000) correctly escalated under R08 and were still `pending_approval` when the harness
+measured GMV. The harness simulates a buyer cancelling a *held* amber order afterward, but
+never simulates a merchant actually resolving an *escalated* red one — so those two carts'
+value is never added back in, even though nothing was blocked. That's the Reversibility
+Ladder working as designed, not an error, but it's also not ₹0 sitting in the balance at
+that moment, so it gets its own line rather than folding into "wrongly blocked."
 
-`core/reversibility.py::reversibility_score_detailed` — pure, deterministic,
-explainable, `[0, 1]`, no I/O, no LLM. Any personalised/bespoke item is a
-hard zero. Otherwise, five weighted factors (multi-item carts take the
-**minimum** per factor across items — a cart is only as reversible as its
-least reversible item):
+**A number that used to be embarrassing.** Band accuracy started at **39/64 (60.9%)** — no
+grocery SKU could score green under the original formula, because it used
+`return_window_days` as a proxy for reversibility and perishables structurally can't have
+long return windows. Researching why real merchants handle cheap-item returns exposed the
+actual bug: *return window isn't reversibility*. The fix (`f_unwind`, §5) was re-measured
+against the **same 64 labels, unchanged** → 62/64 (96.9%). The two remaining misses are
+large-quantity grocery carts that correctly no longer qualify for cheap-item leniency. The
+point isn't that the number rose — it's that it rose without touching the labels.
 
-| Factor | Weight | What it measures |
+## 5. The Reversibility Ladder
+
+`core/reversibility.py::reversibility_score_detailed` — pure, deterministic, `[0,1]`, no
+I/O, no LLM. Personalised/bespoke items are a hard zero. Multi-item carts take the
+**minimum** per factor: a cart is only as reversible as its least reversible item.
+
+| Factor | Weight | Measures |
 |---|---|---|
-| `f_unwind` | 0.35 | perishable/consumable/digital: `1 − min(cart_total_paise / ₹1,000, 1.0)` — "returnless refund" economics (below). Durable/service/bespoke: `min(return_window_days / 14, 1.0)` — a real return is the mechanism, so the window still governs |
+| `f_unwind` | 0.35 | perishable/consumable/digital: `1 − min(total / ₹1,000, 1)` — returnless-refund economics. durable/service/bespoke: `min(return_window_days / 14, 1)` |
 | `f_class` | 0.25 | perishable .95 · consumable .90 · digital .70 · durable .55 · service .35 · bespoke .05 |
-| `f_speed` | 0.15 | `1 − min(fulfilment_hours / 336, 1.0)` |
-| `f_restock` | 0.10 | `1 − min(restocking_cost_pct / 0.30, 1.0)` |
-| `f_value` | 0.15 | `1 − min(cart_total_paise / envelope_ceiling_paise, 1.0)` (cart-level, not per-item) |
+| `f_speed` | 0.15 | `1 − min(fulfilment_hours / 336, 1)` |
+| `f_restock` | 0.10 | `1 − min(restocking_cost_pct / 0.30, 1)` |
+| `f_value` | 0.15 | `1 − min(total / envelope_ceiling, 1)` (cart-level) |
 
-**Why `f_unwind` branches like that:** real retailers routinely refund a
-cheap perishable/consumable item without asking for it back — "returnless
-refunds," standard from Amazon down to a corner kirana store that never
-had formal reverse logistics to begin with — because processing a real
-return commonly costs 20–65% of the item's own value once shipping,
-labour, and restocking are counted, and often exceeds it outright for
-anything cheap. Return window measures whether a *formal* return is
-available, not whether the purchase is actually hard to unwind — those
-aren't the same property, and treating them as one was a real bug (see
-§10/`ARCHITECTURE.md`). A durable good genuinely doesn't get this
-leniency: value doesn't buy autonomy there, a real return really happens,
-and the return window really is the signal.
+**Why `f_unwind` branches.** Retailers routinely refund a cheap perishable without asking
+for it back — processing a real return commonly costs 20–65% of a cheap item's value once
+shipping, labour and restocking are counted. Return window measures whether a *formal*
+return exists, not whether a purchase is hard to unwind. Durable goods don't get that
+leniency: a real return actually happens there, so the window really is the signal.
 
-`score >= 0.75` → **green** (full autonomy). `>= 0.40` → **amber**
-(dispatch withheld for a cooling-off window; buyer gets a WhatsApp one-tap
-undo). Below that → **red** (merchant WhatsApp Approve/Decline required;
-the envelope alone isn't sufficient authority). The 60 (later 64)
-pre-committed hand labels in `harness/labels.json` were written and
-committed *before* the harness ever ran the formula against them —
-weights were never adjusted after seeing accuracy. See §5 for how that
-honesty played out in practice.
+`≥0.75` green (full autonomy) · `≥0.40` amber (dispatch withheld, one-tap undo) · below
+that red (merchant approval required). The 64 hand labels in `harness/labels.json` were
+committed **before** the harness ever ran against them; weights were never adjusted after
+seeing accuracy.
 
-## 7. Threat model
+## 6. Threat model
 
 | Attack | Defense |
 |---|---|
-| Prompt injection in catalog text | Catalog text is data. The gate never reads free text. Injection-invariance asserted in the harness (15/15 byte-identical) |
-| Prompt injection via WhatsApp message | Vendor messages route through a state machine, never into the gate. Media goes to extraction only |
+| Prompt injection in catalog text | Catalog text is data; the gate never reads free text. Injection-invariance asserted (15/15 byte-identical) |
+| Prompt injection via WhatsApp | Vendor messages route through a state machine, never the gate. Media goes to extraction only |
 | Quote replay | Single-use nonce + TTL + `consumed_at` |
 | Price/stock drift at checkout | R05/R06 hard block |
 | Cart tampering post-signature | Signature over JCS canonical form |
-| Envelope escape | `verify_cart_within_envelope()` — R04 + a Hypothesis property test (no ALLOWed cart can push spend above the ceiling) |
-| Irreversibility exploitation | The Reversibility Ladder — R08/R09 |
+| Envelope escape | `verify_cart_within_envelope()` (R04) + Hypothesis property test: no ALLOWed cart can push spend past the ceiling |
+| Irreversibility exploitation | Reversibility Ladder — R08/R09 |
 | Agent identity spoofing | Registry + detached Ed25519 signature + nonce/clock-skew rejection |
-| WhatsApp approval spoofing | Twilio signature verification + single-use approval token bound to `cart_id` |
-| Runaway retry loop | Idempotency + rolling-window velocity — R10/R12 |
-| Hallucination dispute | Dispute Pack — evidence captured at authorization time, signed with the merchant's key |
-| Envelope drain by salami-slicing | Running `spent_paise` + rolling velocity window |
-| Bad extraction reaching agents | Confidence threshold + `needs_review` gate — never exposed until confirmed |
-| Client claims a payment succeeded that wasn't verified server-side | `confirm_real_payment` verifies Razorpay's Checkout.js signature and re-fetches the payment before dispatching — a browser's "success" callback is never trusted on its own |
+| Approval spoofing | Channel signature verification + single-use token bound to `cart_id` |
+| Runaway retry loop | Idempotency + rolling-window velocity (R10/R12) |
+| Hallucination dispute | Dispute Pack — evidence captured at authorization, merchant-signed |
+| Salami-slicing the envelope | Running `spent_paise` + rolling velocity window |
+| Bad extraction reaching agents | Confidence threshold + `needs_review` gate |
+| Client claims an unverified payment succeeded | `confirm_real_payment` verifies Checkout.js signature and re-fetches the payment before dispatch — a browser callback is never trusted alone |
 
-## 8. Design decisions & tradeoffs
+## 7. Design decisions
 
-The full log — every ambiguous call, the option taken, and why — lives in
-[ARCHITECTURE.md](ARCHITECTURE.md). A few load-bearing ones:
+Full log in [ARCHITECTURE.md](ARCHITECTURE.md). The load-bearing ones:
 
-- **No LLM in `core/gate.py`, `core/envelope.py`, `core/reversibility.py`.**
-  The LLM only extracts catalog data (offline/inbound) and ranks
-  substitution candidates (post-filter, non-load-bearing, cheapest-first on
-  any failure). If a design ever seemed to need an LLM call in the money
-  path, that was read as the design being wrong, not as license to add one.
-- **Reversibility weights were never tuned after seeing accuracy — but one
-  factor's *definition* was corrected once, for cause.** `f_unwind`
-  replaced a `return_window_days` proxy that made green structurally
-  unreachable for groceries (60.9% band accuracy, §5) with a factor
-  grounded in real retail-returns economics, re-measured against the same
-  unchanged labels (96.9%). The distinction that keeps this honest: the
-  labels never moved, the reasoning came from external research before
-  re-running the harness, and the same conservative branch (durable goods
-  still use return window) was kept wherever the original signal was
-  actually correct. See §6 and `ARCHITECTURE.md` for the full case.
-- **Real Razorpay Orders, but a real Payment needs a browser.** Razorpay's
-  server-to-server test-card capture API is opt-in and, confirmed directly
-  against this test account, returns `404` by default. Rather than quietly
-  fabricating a fake payment under a real order's id (an earlier version of
-  this code did exactly that), an order that can't be S2S-captured is left
-  `awaiting_payment` and the `/live` frontend completes it with Razorpay's
-  actual Checkout.js widget — a real captured Payment that shows up in the
-  Razorpay dashboard, verified server-side via
-  `RazorpayClient.verify_payment_signature` before the order dispatches.
-  See §9 for what that does and doesn't cover.
-- **Agent Registry as a `Protocol`, not a concrete integration.** Shaped to
-  match NPCI's forthcoming UAP (agent registration/authorization atop UPI
-  Circle's delegated-payments model). When UAP ships, it becomes a second
-  implementation of the same interface; nothing above it changes.
-- **Intent Envelope follows UPI Reserve Pay semantics, not AP2's
-  card-centric flow** — one-time consent, a ceiling, instant revocability —
-  while keeping AP2's vocabulary in code so the interop story stays legible.
+- **No LLM in `gate.py`, `envelope.py`, `reversibility.py`.** The LLM only extracts catalog
+  data and ranks substitution candidates (post-filter, cheapest-first on failure). A design
+  that seemed to need a model call in the money path was read as a wrong design.
+- **Weights were never tuned after seeing accuracy — but one factor's *definition* was
+  corrected once, for cause.** See §4. The labels never moved, the reasoning came from
+  external research before re-running, and the conservative branch was kept where the
+  original signal was correct.
+- **Real Razorpay Orders; a real Payment needs a browser.** Razorpay's S2S test-card capture
+  is opt-in and returns `404` on this account. Rather than fabricate a payment under a real
+  order id (an earlier version of this code did exactly that), unusable orders stay
+  `awaiting_payment` and `/live` completes them through Razorpay's actual Checkout.js
+  widget, verified server-side before dispatch.
+- **Agent Registry is a `Protocol`, not an integration.** Shaped for NPCI's forthcoming UAP.
+  When UAP ships it becomes a second implementation; nothing above it changes.
+- **Intent Envelope follows UPI Reserve Pay, not AP2's card-centric flow** — one-time
+  consent, a ceiling, instant revocability — while keeping AP2 vocabulary in code.
 
-## 9. What's real vs mocked
+## 8. What's real vs mocked
 
-- **Razorpay:** TEST MODE only, real API credentials. Order creation,
-  webhook signature verification, and refunds
-  (`RazorpayClient.refund_payment`, used by cooling-off cancellation) are
-  real. Driving a payment to `captured` has **two real paths**, not one
-  fallback: if Razorpay's S2S test-card capture is enabled on the account,
-  it captures instantly and automatically (`path == "real"`, proven out in
-  `scripts/spike_razorpay.py`); on this account it isn't (confirmed `404`),
-  so the order is left `awaiting_payment(_amber)` and a **genuine
-  Checkout.js round-trip** — Razorpay's own hosted card-entry widget, run
-  from the `/live` page — captures a real payment against it, verified
-  server-side (`verify_payment_signature`, then a payment-status re-check)
-  before the order dispatches or starts its cooling-off window. Use
-  Razorpay's **domestic** Mastercard test card (`5267 3181 8797 5449`, any
-  future expiry/CVV, any OTP) to complete it — this account has
-  international cards disabled, so the globally-published
-  `4111 1111 1111 1111` test number fails with "international cards not
-  allowed" (a real, live-confirmed account setting, not a bug in this
-  build). This is genuinely captured — it appears as a real Payment in the
-  Razorpay test dashboard, not a simulated one.
-  `FakeRazorpayClient` (used by every automated test and the harness, and
-  by any deployment with `RAZORPAY_USE_FAKE=true`) captures synchronously
-  and instantly with no browser involved, so CI needs neither Razorpay nor
-  a browser.
-- **Infra:** Postgres is [Neon](https://neon.tech) (free tier) and Redis is
-  [Redis Cloud](https://redis.io/cloud) (free tier) rather than Railway's
-  bundled addons; the API itself deploys to Railway — real, not mocked.
-  Every automated test runs against `fakeredis` (an in-memory Redis
-  emulator, not a mock) — nonce replay protection, TTLs, and stock holds
-  are exercised for real, just without a server to run.
-- **Catalog extraction (VLM):** live, real API calls to Gemini
-  (`gemini-2.5-flash`) via the `LLMClient` Protocol. **Known limitation:**
-  the free-tier key is capped around 20 requests/day — enough to build both
-  seed catalogs once, but repeated `make ingest` runs can hit
-  `429 RESOURCE_EXHAUSTED`. The pipeline degrades per-file, not as a crash.
-- **Seed images:** the printed/handwritten price-list images in
-  `api/praman/seed/raw/` are synthetically generated
-  (`scripts/gen_seed_images.py`, Pillow) stand-ins for real vendor photos —
-  disclosed rather than passed off as real photographs.
-- **WhatsApp:** Twilio's self-service WhatsApp trial. Inbound webhook
-  delivery is fully real — real signature verification, real state
-  transitions, confirmed live over ngrok from a real phone. Two things are
-  blocked at the Twilio *account* level, not in this code: downloading
-  inbound media (`401`, trial accounts can't fetch `MediaUrl0`) and
-  outbound freeform replies (`400 ContentSid Required` without an approved
-  Content Template). `RealTwilioClient.send_text` works as written and
-  would start working the moment the account is upgraded — nothing in the
-  adapter changes.
-- **Telegram, as a second real channel — not a demo shortcut.** Found live,
-  not anticipated in the original spec: this Twilio trial account can't
-  send outbound freeform text or fetch inbound media at all, which would
-  have silently killed the merchant-approval and buyer-undo messages that
-  are half the pitch. Rather than fake those over a fixed channel, both the
-  API and the scheduler now dispatch through `MultiChannelClient`
-  (`whatsapp/client.py`), which routes any address by its `telegram:` /
-  `whatsapp:` prefix to a real `TelegramClient` or `RealTwilioClient` —
-  same `WhatsAppClient` Protocol either way, so no onboarding/approval/
-  cooling-off business logic branches on which channel a buyer or merchant
-  is on. Telegram's Bot API has no approval-gate equivalent to Twilio's
-  Content Template review, so freeform replies and media both work
-  immediately on a brand-new bot token — merchant Approve/Decline and buyer
-  undo are demoed live over Telegram for that reason, not because WhatsApp
-  itself doesn't work. Every automated test uses `FakeWhatsAppClient`
-  regardless of channel.
-- **`harness/labels.json`'s hand labels:** AI-reasoned, not
-  human-reviewed. `scripts/gen_labels.py` never calls
-  `reversibility_score_detailed`, so the labels aren't circularly derived
-  from the formula they validate — but the §5 accuracy number should be
-  read as validated against an AI-labeled set, a weaker claim than a
-  human-reviewed one.
+- **Razorpay** — TEST MODE, real credentials. Order creation, webhook signature
+  verification, and refunds are real. Capture has two real paths: S2S auto-capture where
+  enabled (proven in `scripts/spike_razorpay.py`), otherwise a genuine Checkout.js
+  round-trip producing a real Payment in the test dashboard. Use Razorpay's **domestic**
+  Mastercard test card `5267 3181 8797 5449` — international cards are disabled on this
+  account, so `4111 1111 1111 1111` fails (a live account setting, not a bug).
+  `FakeRazorpayClient` backs all tests and the harness, so CI needs neither Razorpay nor a
+  browser.
+- **Infra** — Neon Postgres + Redis Cloud (free tiers), API on Railway. Real. Tests run
+  against `fakeredis` (an in-memory emulator, not a mock): nonce replay, TTLs, and stock
+  holds are genuinely exercised.
+- **Catalog extraction** — live Gemini (`gemini-2.5-flash`) calls. Free-tier key caps around
+  20 req/day, so repeated `make ingest` runs can hit `429`. Degrades per-file, not as a crash.
+- **Seed images** — synthetically generated (`scripts/gen_seed_images.py`) stand-ins for real
+  vendor photos. Disclosed, not passed off as photographs.
+- **WhatsApp / Telegram** — Twilio's trial delivers inbound webhooks for real (real signature
+  verification, real state transitions, confirmed live from a phone), but the *account tier*
+  blocks inbound media fetch (`401`) and outbound freeform replies (`400 ContentSid
+  Required`). Rather than fake those, both API and scheduler dispatch through
+  `MultiChannelClient`, routing by `telegram:`/`whatsapp:` prefix behind one Protocol — so no
+  business logic branches on channel. Merchant approvals and buyer undo are demoed over
+  Telegram for that reason, not because the WhatsApp path doesn't work.
+  `RealTwilioClient.send_text` works as written and starts functioning on account upgrade.
+- **`harness/labels.json`** — AI-reasoned, not human-reviewed. `scripts/gen_labels.py` never
+  calls `reversibility_score_detailed`, so labels aren't circularly derived from the formula
+  they validate — but §4's accuracy is validated against an AI-labeled set, a weaker claim
+  than human review.
 
-## 10. Limitations & next steps
+## 9. Limitations
 
-- Reversibility-band accuracy (§5) is now 96.9% (62/64) after the
-  `f_unwind` fix, up from 60.9% — but the residual 2 misses are a real,
-  smaller version of the same class of gap: both are large-quantity
-  grocery carts a labeller called green that now land amber for exceeding
-  the ₹1,000 unwind-free ceiling. The ceiling is a single flat constant,
-  not adjusted per merchant margin or per exact quantity — a more precise
-  model would scale it by category and/or merchant-declared risk
-  tolerance rather than one number for every kirana SKU. Deferred past the
-  freeze, tracked here rather than left unexplained. See
-  ARCHITECTURE.md's reversibility-formula entries for the full reasoning
-  trail, including the original 60.9% finding and the fix.
-- Substitution *acceptance* (a fresh quote → a second `checkout_execute`
-  after R07 offers an alternative) isn't exercised by the 200-session
-  harness, only the SUBSTITUTE offer itself — covered separately by
-  `core/substitution.py`'s own unit tests.
-- Twilio outbound/media access is blocked by this trial account's tier
-  (§9), not a code limitation — upgrading the account with billing removes
-  it with no code changes.
-- The Razorpay Checkout.js flow (§9) needs a human at a browser to
-  complete a real payment for any order the S2S path can't auto-capture —
-  fully autonomous agent checkout with a genuinely captured payment would
-  need either S2S enabled on the account or a payment method that doesn't
-  require a hosted card form at all (e.g. UPI AutoPay/Reserve Pay once
-  available in test mode).
-- The Agent Registry is a local `Protocol` implementation, not a live
-  integration with NPCI's UAP (which hasn't shipped) — see §8.
+- **The harness measures implementation correctness, not robustness** (§4). Independently
+  authored adversarial sessions are the missing piece.
+- The 2 residual band misses are large-quantity grocery carts crossing a flat ₹1,000
+  unwind-free ceiling. A better model would scale that per category or merchant margin
+  rather than one constant for every kirana SKU.
+- Substitution *acceptance* (fresh quote → second `checkout_execute` after R07) isn't in the
+  200-session harness — covered by `core/substitution.py` unit tests only.
+- Twilio outbound/media is a trial-tier block (§8), not a code limitation.
+- Fully autonomous checkout with a genuinely captured payment needs S2S enabled or a method
+  without a hosted card form (UPI AutoPay/Reserve Pay in test mode).
+- The Agent Registry is a local Protocol implementation; NPCI's UAP hasn't shipped.
 
-## 11. Repo map
+## 10. Repo map
 
 ```
 api/praman/
-  core/            gate.py, envelope.py, reversibility.py, checkout.py, ledger.py — the money path
-  adapters/        razorpay_client.py, llm.py — Real/Fake pairs behind a Protocol
-  ingest/          extract.py (VLM), normalise.py (deterministic)
-  whatsapp/        onboarding.py, approvals.py, cooling_off_notify.py, client.py (MultiChannelClient), telegram_client.py
-  api/             routes_*.py — the REST surface
-  mcp/server.py    thin wrappers over the same REST routes
-  crypto/          canonical.py (JCS), keys.py (Ed25519), did.py
-web/
-  app/             /, /onboard, /live, /catalog, /approvals, /dispute/[orderId], /pay/[orderId], /metrics
-  components/      ReversibilityGauge.tsx, LedgerStream.tsx, GateTrail.tsx, AgentTrace.tsx
-harness/           simulator.py, sessions.py, injection_corpus.py, report.py, run.py
-tests/             312 tests, heaviest on gate/envelope/reversibility/checkout
-scripts/           spike_razorpay.py, gen_labels.py, gen_seed_images.py, mcp_agent_demo.py
-ARCHITECTURE.md    full system design + every design decision's tradeoff
-harness/RESULTS.md generated harness output — the numbers in §5
+  core/         gate.py · envelope.py · reversibility.py · checkout.py · ledger.py — the money path
+  adapters/     razorpay_client.py · llm.py — Real/Fake pairs behind a Protocol
+  ingest/       extract.py (VLM) · normalise.py (deterministic)
+  whatsapp/     onboarding · approvals · cooling_off_notify · client (MultiChannel) · telegram_client
+  api/          routes_*.py — REST surface
+  mcp/          server.py — thin wrappers over the same routes
+  crypto/       canonical.py (JCS) · keys.py (Ed25519) · did.py
+web/app/        / · /onboard · /live · /catalog · /approvals · /dispute/[id] · /pay/[id] · /metrics
+harness/        simulator · sessions · injection_corpus · report · run
+scripts/        spike_razorpay.py · gen_labels.py · gen_seed_images.py · mcp_agent_demo.py
+tests/          312 tests, heaviest on gate/envelope/reversibility/checkout
+ARCHITECTURE.md full design + every decision's tradeoff
 ```
