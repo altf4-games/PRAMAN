@@ -7,10 +7,40 @@ afterwards exactly what the agent was allowed to do.
 [![Demo](https://img.shields.io/badge/demo-praman--jet.vercel.app-141A22)](https://praman-jet.vercel.app)
 [![API](https://img.shields.io/badge/API-praman--production.up.railway.app-141A22)](https://praman-production.up.railway.app)
 
-
 **In 60 seconds:** [`/live`](https://praman-jet.vercel.app/live) runs a real MCP agent
 against a seeded shop, streaming gate decisions into a hash-chained ledger. Break a ledger
 row from that page and watch the chain proof fail.
+
+<table>
+<tr>
+<td width="50%">
+
+**Homepage — the thesis in one line**
+![Homepage](docs/screenshots/home.png)
+
+</td>
+<td width="50%">
+
+**`/live` — an agent deciding, gate + ledger streaming**
+![Live agent session](docs/screenshots/live.png)
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+**`/dispute/[orderId]` — the exported dispute pack**
+![Dispute pack](docs/screenshots/dispute.png)
+
+</td>
+<td width="50%">
+
+**`/metrics` — real counts from this deployment**
+![Metrics](docs/screenshots/metrics.png)
+
+</td>
+</tr>
+</table>
 
 ---
 
